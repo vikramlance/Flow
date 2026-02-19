@@ -1,0 +1,113 @@
+package com.vikra.willard.presentation.history
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.vikra.willard.ui.theme.NeonGreen
+import com.vikra.willard.ui.theme.SurfaceDark
+import com.vikra.willard.presentation.analytics.ContributionHeatmap
+import com.vikra.willard.presentation.home.HomeViewModel
+import java.util.Calendar
+import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TaskHistoryScreen(
+    taskId: Long,
+    onBack: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val tasks by viewModel.tasks.collectAsState()
+    val task = tasks.find { it.id == taskId }
+    val history by viewModel.getTaskHistory(taskId).collectAsState(initial = emptyList())
+    val streak by viewModel.getRawTaskStreak(taskId).collectAsState(initial = 0)
+
+    // Convert TaskCompletionLog to DailyProgressEntity format for the Heatmap component
+    val progressHistory = history.map { 
+        com.vikra.willard.data.local.DailyProgressEntity(
+            date = it.date,
+            tasksCompletedCount = if (it.isCompleted) 1 else 0,
+            tasksTotalCount = 1
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(task?.title ?: "Task History") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceDark)
+            )
+        },
+        containerColor = SurfaceDark
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Streak Header
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = NeonGreen.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🌱", style = MaterialTheme.typography.displayMedium)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "$streak Days",
+                            style = MaterialTheme.typography.displayLarge,
+                            color = NeonGreen
+                        )
+                        Text("Current Streak", color = Color.Gray)
+                    }
+                }
+            }
+
+            Text("Contribution History (1 Year)", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                modifier = Modifier.fillMaxWidth().height(250.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    ContributionHeatmap(progressHistory)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            if (task?.isRecurring == false) {
+                Text(
+                    "Note: Streak tracking is most effective for recurring tasks.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}

@@ -1,0 +1,60 @@
+######### Android/Java/Kotlin/IntelliJ/Gradle ignores #########
+
+# Gradle
+.gradle/
+/**/build/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+out/
+
+# Android Studio captures
+/captures/
+
+# Generated files
+**/build/
+**/generated/
+
+# Kotlin/Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Gradle wrapper
+/.gradle/
+gradle-wrapper.jar
+
+# Signing keys and private files
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+*.pem
+
+# Google Services
+google-services.json
+
+# Environment files
+.env
+.env.*
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
+
+# Android Studio
+.idea/
+*.iml
+
+# Misc
+.externalNativeBuild/
+/.cxx/
