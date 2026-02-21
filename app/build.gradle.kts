@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.vikra.willard"
+    namespace = "com.flow"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.vikra.willard"
+        applicationId = "com.flow"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
