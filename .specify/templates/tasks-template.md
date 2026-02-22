@@ -8,12 +8,18 @@ description: "Task list template for feature implementation"
 **Input**: Design documents from `/specs/[###-feature-name]/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: Tests at all tiers (unit, instrumented/integration, system/on-device) are MANDATORY for every feature. Never substitute an automated test tier with a "manual testing" task. Use the [P] tag to mark test tasks as parallel-safe.
 
-**Constitution Gates**: Even when automated tests are not requested, tasks MUST include:
-- A non-regression verification task (manual checklist or scripted validation)
+**Constitution Gates**: Tasks MUST include:
+- At least one unit-test task per user story (Tier 1, `src/test/`).
+- At least one instrumented test task per user story for DAO/repository/UI integration (Tier 2, `src/androidTest/`).
+- At least one on-device/E2E task for each critical user journey (Tier 3).
+- A compile-gate task before the first Tier 2 task.
+- All test tasks tagged [P] where parallel-safe.
+- A non-regression verification task (automated test or scripted assertion — manual-only checklists are NOT acceptable)
 - Any required data migration/validation tasks (if persistence is touched)
 - A consistency check task (layer boundaries + state modelling)
+- A security check task: confirm no credentials or PII in tracked files, `.gitignore` up to date, parameterized queries used, no sensitive production logging
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -84,9 +90,9 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 1 (MANDATORY — all tiers required)
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> **Tier 1 — Unit tests**: write these FIRST; they must FAIL before implementation, PASS after.
 
 - [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
 - [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
@@ -110,7 +116,7 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 2 (MANDATORY — all tiers required)
 
 - [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
 - [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py

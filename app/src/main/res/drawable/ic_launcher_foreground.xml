@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    T016: Adaptive icon foreground — wraps the Flow logo PNG as a bitmap drawable.
+    The system picks the correct density variant from mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/flow_logo.png.
+    gravity="center" ensures the logo is centred within the 108dp foreground area.
+    NOTE: Ideally each density PNG is properly scaled in Android Studio's Image Asset Studio.
+-->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/flow_logo"
+    android:gravity="center" />

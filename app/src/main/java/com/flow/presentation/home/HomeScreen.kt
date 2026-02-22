@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import com.flow.data.local.TaskStatus
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -51,22 +53,20 @@ fun HomeScreen(
     onNavigateToAnalytics: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToTaskHistory: (Long) -> Unit,
+    onNavigateToHistory: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val activeTasks = uiState.tasks.filter { it.status != TaskStatus.COMPLETED }
     var showAddDialog by remember { mutableStateOf(false) }
     var showTimerDialog by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<TaskEntity?>(null) }
     var streakTask by remember { mutableStateOf<TaskEntity?>(null) }
 
-    val percentage = uiState.todayProgress
-    
-    val streakColor = when {
-        percentage >= 1f -> NeonGreen
-        percentage >= 0.5f -> TaskInProgress // Yellow
-        else -> TaskOverdue // Orange
-    }
+    val todayProgressState = uiState.todayProgressState
+    val percentage = todayProgressState.ratio
+
+    // T021: yellow until 100 %, green when all done
+    val streakColor = if (percentage >= 1f) NeonGreen else TaskInProgress
 
     Scaffold(
         topBar = {
@@ -78,6 +78,12 @@ fun HomeScreen(
                    }
                    IconButton(onClick = onNavigateToAnalytics) {
                        Icon(Icons.Default.DateRange, contentDescription = "Stats", tint = NeonGreen)
+                   }
+                   IconButton(onClick = onNavigateToHistory) {
+                       Icon(Icons.Default.History, contentDescription = "History", tint = NeonGreen, modifier = Modifier.size(28.dp))
+                   }
+                   IconButton(onClick = { viewModel.showHelp() }) {
+                       Icon(Icons.Default.Info, contentDescription = "Help", tint = NeonGreen, modifier = Modifier.size(28.dp))
                    }
                    IconButton(onClick = onNavigateToSettings) {
                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = NeonGreen)
@@ -97,33 +103,58 @@ fun HomeScreen(
         containerColor = SurfaceDark
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            // Dashboard Header
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = streakColor.copy(alpha = 0.2f)),
-                border = BorderStroke(1.dp, streakColor),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // Dashboard Header — T021: today-focused progress
+            if (!todayProgressState.hasAnyTodayTasks) {
+                // Empty state: no tasks due today
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Gray.copy(alpha = 0.12f)),
+                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.4f)),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column {
-                        Text("Daily Progress", style = MaterialTheme.typography.labelLarge, color = Color.White)
-                        Text(
-                            text = "${(percentage * 100).toInt()}%", 
-                            style = MaterialTheme.typography.displayMedium, 
-                            color = streakColor
-                        )
-                    }
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
-                            .background(streakColor, RoundedCornerShape(8.dp))
-                    )
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No tasks for today",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = streakColor.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, streakColor),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Today's progress", style = MaterialTheme.typography.labelLarge, color = Color.White)
+                            Text(
+                                text = "${(percentage * 100).toInt()}%",
+                                style = MaterialTheme.typography.displayMedium,
+                                color = streakColor
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(streakColor, RoundedCornerShape(8.dp))
+                        )
+                    }
                 }
             }
 
@@ -135,16 +166,17 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(activeTasks, key = { it.id }) { task ->
-                    val streakCount by viewModel.getRawTaskStreak(task.id).collectAsState(initial = 0)
+                items(uiState.homeTasks, key = { it.task.id }) { item ->
+                    val streakCount by viewModel.getRawTaskStreak(item.task.id).collectAsState(initial = 0)
                     TaskItem(
-                        task = task,
+                        task = item.task,
+                        urgency = item.urgency,
                         streakCount = streakCount,
                         onStatusChange = { newStatus ->
-                            viewModel.updateTaskStatus(task, newStatus)
+                            viewModel.updateTaskStatus(item.task, newStatus)
                         },
-                        onEdit = { editingTask = task },
-                        onShowStreak = { onNavigateToTaskHistory(task.id) }
+                        onEdit = { editingTask = item.task },
+                        onShowStreak = { onNavigateToTaskHistory(item.task.id) }
                     )
                 }
             }
@@ -153,8 +185,8 @@ fun HomeScreen(
         if (showAddDialog) {
             AddTaskDialog(
                 onDismiss = { showAddDialog = false },
-                onAdd = { title, startDate, dueDate, isRecurring ->
-                    viewModel.addTask(title, startDate, dueDate, isRecurring)
+                onAdd = { title, startDate, dueDate, isRecurring, scheduleMask ->
+                    viewModel.addTask(title, startDate, dueDate, isRecurring, scheduleMask)
                     showAddDialog = false
                 }
             )
@@ -191,6 +223,10 @@ fun HomeScreen(
             OnboardingFlow(
                 onComplete = { viewModel.completeOnboarding() }
             )
+        }
+
+        if (uiState.showHelp) {
+            HelpOverlay(onDismiss = { viewModel.hideHelp() })
         }
     }
 }
@@ -257,10 +293,73 @@ fun OnboardingDialog(onDismiss: () -> Unit) {
 }
 
 
+/**
+ * T021 — Help overlay shown when the user taps the ℹ Info icon in the TopAppBar.
+ * Displays a concise reminder of key app interactions. Dismissible by tapping outside or the button.
+ */
+@Composable
+fun HelpOverlay(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = SurfaceDark)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "ℹ️ How to use Flow",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = NeonGreen
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val tips = listOf(
+                    "👆 Tap a task card to advance its status: TODO → In Progress ⏳ → Done ✅",
+                    "✏️ Long-press any card to edit or delete it.",
+                    "🌱 Recurring tasks track your daily completion streak.",
+                    "⏱️ Use the Focus Timer to stay in the zone.",
+                    "📊 Tap Analytics to view your heatmap and stats.",
+                    "📋 Tap History to see all completed tasks.",
+                    "🎯 The dashboard colour: Green ≥100% · Yellow ≥50% · Orange <50%."
+                )
+
+                tips.forEach { tip ->
+                    Text(
+                        text = tip,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NeonGreen,
+                        contentColor = Color.Black
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Got it!")
+                }
+            }
+        }
+    }
+}
+
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TaskItem(
     task: TaskEntity,
+    urgency: UrgencyLevel = UrgencyLevel.NONE,
     streakCount: Int,
     onStatusChange: (com.flow.data.local.TaskStatus) -> Unit,
     onEdit: () -> Unit,
@@ -269,25 +368,33 @@ fun TaskItem(
     val status = task.status
     val isCompleted = status == com.flow.data.local.TaskStatus.COMPLETED
     val isInProgress = status == com.flow.data.local.TaskStatus.IN_PROGRESS
-    
+
     val cardColor = when (status) {
-        com.flow.data.local.TaskStatus.COMPLETED -> NeonGreen
+        com.flow.data.local.TaskStatus.COMPLETED   -> NeonGreen
         com.flow.data.local.TaskStatus.IN_PROGRESS -> TaskInProgress
-        else -> SurfaceDark
+        else                                        -> SurfaceDark
     }
-    
+
     val animatedColor by animateColorAsState(
         targetValue = cardColor,
         label = "BoxColor"
     )
-    
+
     // Status Logic
     val isOverdue = !isCompleted && task.dueDate != null && task.dueDate < System.currentTimeMillis()
+    // T024: urgency border overrides default grey when not overdue / completed / in-progress
+    val urgencyColor = when (urgency) {
+        UrgencyLevel.GREEN  -> com.flow.ui.theme.NeonGreen.copy(alpha = 0.7f)
+        UrgencyLevel.YELLOW -> TaskInProgress
+        UrgencyLevel.ORANGE -> TaskOverdue
+        UrgencyLevel.NONE   -> null
+    }
     val borderColor = when {
-        isOverdue -> TaskOverdue
-        isInProgress -> TaskInProgress
-        isCompleted -> NeonGreen
-        else -> Color.Gray.copy(alpha=0.5f)
+        isOverdue                            -> TaskOverdue
+        isInProgress                         -> TaskInProgress
+        isCompleted                          -> NeonGreen
+        urgencyColor != null                 -> urgencyColor
+        else                                 -> Color.Gray.copy(alpha = 0.5f)
     }
     val contentColor = if (isCompleted) Color.Black else Color.White
 
@@ -311,7 +418,7 @@ fun TaskItem(
         colors = CardDefaults.cardColors(
             containerColor = animatedColor
         ),
-        border = if (isCompleted) null else BorderStroke(1.dp, borderColor)
+        border = if (isCompleted) null else BorderStroke(if (isOverdue) 2.dp else 1.dp, borderColor)
     ) {
         Column(
             modifier = Modifier
@@ -400,9 +507,10 @@ fun TaskItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean) -> Unit) {
+fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, Int?) -> Unit) {
     var text by remember { mutableStateOf("") }
     var isRecurring by remember { mutableStateOf(false) }
+    var scheduleMask by remember { mutableStateOf<Int?>(null) } // null = every day
     
     val currentMillis = System.currentTimeMillis()
     var startDate by remember { mutableLongStateOf(currentMillis) }
@@ -494,7 +602,7 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean) -
                 Button(
                     onClick = { 
                         if (text.isNotBlank()) {
-                            onAdd(text, startDate, dueDate, isRecurring)
+                            onAdd(text, startDate, dueDate, isRecurring, scheduleMask)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black),

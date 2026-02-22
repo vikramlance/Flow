@@ -3,22 +3,33 @@ Sync Impact Report
 
 - Version change: 0.0.0 → 1.0.0 (MAJOR: initial constitution from analysis)
 - Version change: 1.0.0 → 1.1.0 (MINOR: added Rename & Deployment Protocol section)
+- Version change: 1.1.0 → 1.2.0 (MINOR: added Principle VI Security & Privacy + Security gate #4)
+- Version change: 1.2.0 → 1.2.1 (PATCH: added Workflow Conventions section — bulk clarification questions)
+- Version change: 1.2.1 → 1.3.0 (MINOR: promoted Testing to Gate 5 (mandatory); added Test Execution
+  Protocol with 4-tier pyramid, device detection/wait loop, AVD fallback, and anti-patterns;
+  replaced thin bottom "## Testing" stub; updated plan-template.md and tasks-template.md)
+- Version change: 1.3.0 → 1.3.1 (PATCH: added Repository Hygiene rule — temporary/output/log files
+  must live in logs/ which is .gitignored; never place them at repo root)
 - Principles established:
   - I. Additive Logic (Non-Regression)
   - II. Data Integrity (Single Source of Truth)
   - III. Layered Architecture Boundaries
   - IV. State-Driven UI
   - V. Explicit Dependency Boundaries
+  - VI. Security & Privacy (1.2.0 — NEW)
 - Sections established:
   - Core Principles
   - Platform Bindings (Current Implementation)
   - Development Workflow & Quality Gates
+    - Gate 4: Security (1.2.0 — NEW)
+    - Gate 5: Testing (1.3.0 — NEW, mandatory)
+  - Test Execution Protocol (1.3.0 — NEW)
   - Rename & Deployment Protocol (1.1.0)
   - Governance (amendment procedure, versioning, compliance)
 - Templates aligned:
-  - ✅ .specify/templates/plan-template.md (Constitution Check gates)
-  - ✅ .specify/templates/spec-template.md (AL/DI/CO requirements)
-  - ✅ .specify/templates/tasks-template.md (Constitution Gates)
+  - ✅ .specify/templates/plan-template.md (Gate 5 Testing added to Constitution Check)
+  - ✅ .specify/templates/spec-template.md (SE-001–SE-004 security requirements — unchanged)
+  - ✅ .specify/templates/tasks-template.md (tests changed from OPTIONAL to MANDATORY)
 - Deferred TODOs: None
 -->
 
@@ -126,7 +137,54 @@ Dependencies MUST be declared, injected, and replaceable.
 **Rationale**: Explicit injection makes every dependency visible,
 testable with fakes/mocks, and swappable across platforms.
 
-## Platform Bindings (Current Implementation)
+### VI. Security & Privacy
+
+The codebase MUST NOT expose personal, private, or sensitive
+information, and MUST NOT introduce security vulnerabilities.
+
+**No secrets or personal data in tracked files**
+
+- Credentials (passwords, API keys, tokens, signing key
+  passphrases) MUST NEVER appear in any source-controlled file
+  — not in comments, constants, log statements, or test
+  fixtures.
+- Personal information (local machine paths such as
+  `C:\Users\<name>`, device serials, email addresses, real
+  names) MUST NOT appear in any tracked file (`.kt`, `.xml`,
+  `.pro`, `.md`, `.gradle`, `.kts`, `.toml`, `.properties`).
+- All sensitive file patterns MUST be present in `.gitignore`
+  before the first commit. At minimum this covers:
+  `local.properties`, `.idea/`, `*.jks`, `*.keystore`,
+  `keystore.properties`, `google-services.json`, `.env`,
+  `signing.properties`, and any `build_log*.txt` output files.
+- If a secret is accidentally committed, it MUST be treated as
+  compromised immediately: rotate the credential, then purge it
+  from history (git-filter-repo or BFG) before pushing.
+
+**No code-introduced vulnerabilities**
+
+- Database queries MUST use parameterized bindings (Room
+  `@Query` with named parameters). Raw string-concatenated SQL
+  is prohibited.
+- Network traffic MUST use HTTPS. Cleartext HTTP is prohibited
+  in production builds (`android:usesCleartextTraffic="false"`
+  or equivalent).
+- Sensitive user data (task content, locations, health data)
+  MUST NOT be written to `Logcat` at any log level in
+  production (`release`) builds.
+- Third-party SDK versions MUST be reviewed for known CVEs
+  before adoption. Any dependency with a critical or high CVE
+  MUST be updated or replaced before shipping.
+- Exported Android components (`Activity`, `Service`,
+  `Receiver`, `Provider`) MUST declare explicit
+  `android:exported` values and include permission checks where
+  access should be restricted.
+
+**Rationale**: A real security incident — leaked credentials,
+exposed PII, or an exploitable vulnerability — causes
+irreversible harm to users and trust. Security is not a
+exclusive Phase-7 concern: guardrails MUST be applied from the
+first commit. (Current Implementation)
 
 The Core Principles above are **platform-agnostic**. Below are the
 current Android bindings; an iOS implementation would substitute
@@ -158,10 +216,135 @@ specification, planning, and code review:
 3. **Consistency gate** — Confirm the change respects layer
    boundaries (UI → VM → repository → storage) and uses
    consistent state modelling (single state object per screen).
+4. **Security gate** — Confirm: (a) no personal information or
+   credentials are introduced into tracked files; (b)
+   `.gitignore` covers all new sensitive file types produced by
+   the change; (c) new code uses parameterized queries, HTTPS,
+   and suppresses sensitive log output in production; (d) any
+   new third-party dependency has been checked for known CVEs.
+
+5. **Testing gate** — Confirm every layer of the test pyramid is
+   covered for the change:
+   (a) Unit tests for every new/modified function, class, or
+   ViewModel in `src/test/`;
+   (b) Instrumented (integration) tests for DAO interactions,
+   repository contracts, and any UI component with side effects
+   in `src/androidTest/`;
+   (c) End-to-end (system) tests for each critical user journey
+   on a real or virtual device;
+   (d) The full test suite — unit, instrumented, and on-device —
+   MUST pass before a change is considered complete.
+   Manual testing MUST NOT be substituted for automated tests
+   at any tier. If a scenario cannot be automated today, a
+   tracking task to automate it MUST be created.
 
 If a gate cannot be satisfied, the plan MUST include a
 mitigation, a rollback path, and an explicit approval note
 explaining why the exception is acceptable.
+
+## Test Execution Protocol
+
+This section is **normative** — every feature implementation MUST
+follow it before declaring the work complete.
+
+### Tier 1 — Unit Tests
+
+```powershell
+.\gradlew testDebugUnitTest
+```
+
+- Runs on the JVM; no device required.
+- MUST pass with zero failures before proceeding to Tier 2.
+- Covers: domain logic, ViewModels, StreakCalculator, state
+  helpers, and repository fakes.
+
+### Tier 2 — Instrumented / Integration Tests
+
+```powershell
+.\gradlew compileDebugAndroidTestKotlin  # compile-only gate first
+.\gradlew connectedDebugAndroidTest       # requires device or AVD
+```
+
+- Requires a connected Android device or running AVD.
+- MUST pass with zero failures before the branch is merged.
+- Covers: Room DAO tests, repository integrity, Compose UI
+  component tests.
+
+### Tier 3 — System / End-to-End Tests
+
+```powershell
+.\gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.flow.E2ETestSuite
+```
+
+- Covers: full navigation flows (home → history → analytics),
+  task lifecycle (create → complete → streak update),
+  DB migration smoke test on the device.
+- If a dedicated E2E suite does not yet exist, Tier 2 connected
+  tests serve as the system gate until the suite is created.
+
+### Device Detection & Wait Protocol
+
+Before running any Tier 2 or Tier 3 command, execute the
+following device check. If no device is found the agent MUST
+wait — never skip or substitute with manual steps.
+
+**PowerShell detection script** (run before every
+`connectedDebugAndroidTest` invocation):
+
+```powershell
+$adb = "C:\Users\vikra\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+$maxWaitSeconds = 300  # 5 minutes
+$pollInterval   = 10   # seconds
+$elapsed        = 0
+
+do {
+    $devices = & $adb devices 2>&1 | Where-Object { $_ -match "\bdevice\b" -and $_ -notmatch "^List" }
+    if ($devices) {
+        Write-Host "Device found: $devices"
+        break
+    }
+    if ($elapsed -ge $maxWaitSeconds) {
+        Write-Error "No Android device detected after $maxWaitSeconds s. Connect a physical device or start an AVD and retry."
+        exit 1
+    }
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] No device found. Waiting $pollInterval s... (${elapsed}s elapsed)"
+    Write-Host "  → Connect a physical device via USB, or start an AVD in Android Studio (Tools → Device Manager → ▶)."
+    Start-Sleep -Seconds $pollInterval
+    $elapsed += $pollInterval
+} while ($true)
+```
+
+**If waiting is not feasible** (e.g., CI environment without a
+connected device), create an Android Virtual Device (AVD) first:
+
+```powershell
+# List available system images
+& "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager" --list | Select-String "system-images"
+# Create AVD (adjust image as needed)
+& "$env:ANDROID_HOME\cmdline-tools\latest\bin\avdmanager" create avd `
+    --name FlowTestAVD `
+    --package "system-images;android-34;google_apis;x86_64" `
+    --device "pixel_6"
+# Start the emulator in the background
+Start-Process -NoNewWindow "$env:ANDROID_HOME\emulator\emulator" `
+    -ArgumentList "-avd FlowTestAVD -no-audio -no-boot-anim -gpu swiftshader_indirect"
+# Wait for boot
+& $adb wait-for-device shell getprop sys.boot_completed
+```
+
+- AVD creation is a **fallback only** when no physical device
+  is available. A physical device is always preferred.
+- The agent MUST ask the user to connect a device before
+  creating an AVD, and MUST wait up to 5 minutes.
+
+### Anti-Patterns (Prohibited)
+
+| Anti-pattern | Why prohibited |
+|---|---|
+| Skipping Tier 2/3 because "unit tests cover it" | Instrumented tests catch Room migration bugs, Compose integration regressions, and Hilt wiring errors that JVM tests cannot. |
+| Adding a task "manual QA on device" as a substitute for a Tier 3 test | Manual steps are not reproducible, not tracked, and not enforceable in CI. |
+| Marking a change complete before all tiers pass | Violates Gate 5 and the Additive Logic gate simultaneously. |
+| Running only the changed-module tests to "save time" | All tiers MUST run on the full project; partial runs are informational only. |
 
 ### Rename & Deployment Protocol
 
@@ -213,6 +396,49 @@ activity's class package — typically caused by a stale device
 installation or a cached run configuration that predates the
 rename.
 
+## Repository Hygiene
+
+### Temporary, Output, and Log Files
+
+Build output files, test result captures, and any other
+temporary or machine-generated text files MUST NOT be placed
+at the repository root or anywhere else in version-controlled
+directories.
+
+- All such files MUST be written to the `logs/` directory at
+  the repo root. This directory is listed in `.gitignore` and
+  is NEVER committed.
+- Examples of files that belong in `logs/` (never at root):
+  - Build command output captures (`build_output.txt`, etc.)
+  - Test result text dumps (`unit_test_out.txt`, etc.)
+  - Device / instrumented test logs
+  - Any ad-hoc `*.txt` scratch file produced by a shell command
+- When a command's output needs to be inspected, redirect it:
+  `./gradlew <task> 2>&1 | Tee-Object logs/<descriptive-name>.txt`
+- After the output is no longer needed it should be deleted;
+  `logs/` is a scratch area, not an archive.
+- Do NOT add new `.gitignore` patterns for individual file names;
+  the top-level `logs/` rule is the single point of control.
+
+**Rationale**: Scattered output files at the repo root confuse
+navigation, pollute `git status`, and add noise to every file
+picker in the IDE. Keeping them in one ignored directory keeps
+the working tree clean and the intent obvious.
+
+## Workflow Conventions
+
+### Clarification Sessions (`/speckit.clarify`)
+
+- All clarification questions for a session MUST be presented
+  **simultaneously in a single message**, not one at a time.
+- Every question MUST include a labeled options table (A / B / C …)
+  so the user can reply with a letter.
+- A recommended option MUST be identified and stated before the
+  options table with a one- or two-sentence rationale.
+- The user may answer all questions in a single reply by listing
+  the question header and chosen option (e.g., "Q1: A, Q2: C").
+- Maximum of 5 questions per clarification session (unchanged).
+
 ## Governance
 
 This constitution is the highest-level rule set for the Flow
@@ -239,10 +465,4 @@ document MUST be corrected.
 - Code reviews MUST verify Additive Logic, Data Integrity,
   and Consistency gates before approval.
 
-## Testing
-**build**: build must be successful and validated
-**Unit tests**: add unit tests for maximum coverage.
-**UI tests**: add tests for integration and end-to-end flows on critical paths.
-Tests MUST correctness of functional requirements.
-
-**Version**: 1.1.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-20
+**Version**: 1.3.1 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-22

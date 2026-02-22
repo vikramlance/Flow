@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.flow.presentation.analytics.AnalyticsScreen
+import com.flow.presentation.history.GlobalHistoryScreen
 import com.flow.presentation.history.TaskHistoryScreen
 import com.flow.presentation.home.HomeScreen
 import com.flow.presentation.settings.SettingsScreen
@@ -19,7 +20,8 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                 onNavigateToTaskHistory = { taskId ->
                     navController.navigate(Routes.taskStreak(taskId))
-                }
+                },
+                onNavigateToHistory = { navController.navigate(Routes.HISTORY) }
             )
         }
 
@@ -28,8 +30,7 @@ fun AppNavGraph(navController: NavHostController) {
         }
 
         composable(Routes.HISTORY) {
-            // Global history — reserved for future full-history screen
-            AnalyticsScreen(onBack = { navController.popBackStack() })
+            GlobalHistoryScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.SETTINGS) {

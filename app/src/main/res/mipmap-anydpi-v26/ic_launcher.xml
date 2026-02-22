@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    T017: Adaptive launcher icon (API 26+).
+    Background: solid near-black (#0A0A0A) from ic_launcher_background.xml
+    Foreground: Flow logo PNG from ic_launcher_foreground.xml (bitmap wrapper)
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

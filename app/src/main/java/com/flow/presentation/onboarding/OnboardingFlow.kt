@@ -37,14 +37,19 @@ private data class OnboardingStep(val title: String, val body: String)
 /**
  * T050 — Multi-step onboarding overlay (4 steps).
  * Calls [onComplete] on the final step "Let's Go!" button press.
+ * Calls [onDismiss] if the user taps outside the dialog; defaults to [onComplete] for
+ * backward compatibility (outside-tap = treated as "dismiss/skip").
  */
 @Composable
-fun OnboardingFlow(onComplete: () -> Unit) {
+fun OnboardingFlow(
+    onComplete: () -> Unit,
+    onDismiss: () -> Unit = onComplete
+) {
     var currentStep by remember { mutableIntStateOf(0) }
     val step = steps[currentStep]
     val isLast = currentStep == steps.lastIndex
 
-    Dialog(onDismissRequest = {}) { // Require explicit completion
+    Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
