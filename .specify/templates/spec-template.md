@@ -90,13 +90,17 @@
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
 
-### Additive Logic, Data Integrity, Consistency *(mandatory)*
+### Additive Logic, Data Integrity, Consistency, Security *(mandatory)*
 
 - **AL-001 (Additive)**: New behavior MUST NOT break existing user flows; impacted flows: [list].
 - **AL-002 (Verification)**: Non-regression verification MUST be defined: [tests and/or manual steps].
 - **DI-001 (Integrity)**: Data invariants to preserve: [list invariants and constraints].
 - **DI-002 (Migration)**: Any schema/storage changes MUST include a safe migration + validation plan.
 - **CO-001 (Consistency)**: Implementation MUST follow established boundaries (UI → VM → repository → storage).
+- **SE-001 (No Secrets)**: No passwords, API keys, tokens, or credentials in any tracked file.
+- **SE-002 (No PII)**: No usernames, local machine paths, device serials, or email addresses in tracked files.
+- **SE-003 (Safe Queries)**: All database queries MUST use parameterized bindings; raw concatenated SQL is prohibited.
+- **SE-004 (No Sensitive Logging)**: Sensitive user data MUST NOT be written to logs in production builds.
 
 *Example of marking unclear requirements:*
 

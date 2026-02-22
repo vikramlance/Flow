@@ -23,21 +23,26 @@ class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
+    private val _helpVisible = MutableStateFlow(false)
+
     val uiState: StateFlow<HomeUiState> = combine(
-        repository.getAllTasks(),
-        repository.getTodayProgressRatio(),
-        settingsRepository.isFirstLaunch
-    ) { tasks, progress, isFirstLaunch ->
+        repository.getHomeScreenTasks(),
+        repository.getTodayProgress(),
+        settingsRepository.isFirstLaunch,
+        _helpVisible
+    ) { homeTasks, todayProgressState, isFirstLaunch, helpVisible ->
+        val now = System.currentTimeMillis()
         HomeUiState(
-            tasks = tasks,
-            todayProgress = progress,
-            isFirstLaunch = isFirstLaunch,
-            isLoading = false
+            homeTasks          = homeTasks.map { HomeTaskItem(it, it.urgencyLevel(now)) },
+            todayProgressState = todayProgressState,
+            isFirstLaunch      = isFirstLaunch,
+            isLoading          = false,
+            showHelp           = helpVisible
         )
     }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = HomeUiState()
+        scope         = viewModelScope,
+        started       = SharingStarted.WhileSubscribed(5000),
+        initialValue  = HomeUiState()
     )
 
     init {
@@ -57,10 +62,11 @@ class HomeViewModel @Inject constructor(
         title: String,
         startDate: Long = System.currentTimeMillis(),
         dueDate: Long? = null,
-        isRecurring: Boolean = false
+        isRecurring: Boolean = false,
+        scheduleMask: Int? = null
     ) {
         viewModelScope.launch {
-            repository.addTask(title, startDate, dueDate, isRecurring)
+            repository.addTask(title, startDate, dueDate, isRecurring, scheduleMask)
         }
     }
 
@@ -85,6 +91,10 @@ class HomeViewModel @Inject constructor(
     fun getRawTaskStreak(taskId: Long) = repository.getTaskStreak(taskId)
 
     fun getTaskHistory(taskId: Long) = repository.getTaskHistory(taskId)
+
+    fun showHelp() { _helpVisible.value = true }
+
+    fun hideHelp() { _helpVisible.value = false }
 
     private fun checkAndPopulateDummyData() {
         viewModelScope.launch {

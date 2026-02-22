@@ -1,6 +1,9 @@
 package com.flow.data.repository
 
 import androidx.room.withTransaction
+import com.flow.data.local.AchievementDao
+import com.flow.data.local.AchievementEntity
+import com.flow.data.local.AchievementType
 import com.flow.data.local.AppDatabase
 import com.flow.data.local.DailyProgressDao
 import com.flow.data.local.DailyProgressEntity
@@ -9,9 +12,15 @@ import com.flow.data.local.TaskCompletionLogDao
 import com.flow.data.local.TaskDao
 import com.flow.data.local.TaskEntity
 import com.flow.data.local.TaskStatus
+import com.flow.data.local.TaskStreakDao
+import com.flow.data.local.TaskStreakEntity
+import com.flow.domain.streak.DayMask
+import com.flow.domain.streak.StreakCalculator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -19,7 +28,9 @@ class TaskRepositoryImpl @Inject constructor(
     private val db: AppDatabase,
     private val taskDao: TaskDao,
     private val dailyProgressDao: DailyProgressDao,
-    private val taskCompletionLogDao: TaskCompletionLogDao
+    private val taskCompletionLogDao: TaskCompletionLogDao,
+    private val taskStreakDao: TaskStreakDao,
+    private val achievementDao: AchievementDao
 ) : TaskRepository {
 
     // ── Reactive queries ──────────────────────────────────────────────────
@@ -38,53 +49,98 @@ class TaskRepositoryImpl @Inject constructor(
     override fun getTaskHistory(taskId: Long): Flow<List<TaskCompletionLog>> =
         taskCompletionLogDao.getLogsForTask(taskId)
 
-    override fun getTodayProgressRatio(): Flow<Float> {
-        val todayEnd = getEndOfDay(normaliseToMidnight(System.currentTimeMillis()))
-        return taskDao.getTasksActiveToday(todayEnd).map { tasks ->
-            if (tasks.isEmpty()) return@map 0f
-            val completedCount = tasks.count { it.status == TaskStatus.COMPLETED }
-            completedCount.toFloat() / tasks.size
+    // ── FR-001: today progress counts only dueDate=todayMidnight tasks ──
+
+    override fun getTodayProgress(): Flow<TodayProgressState> {
+        val today = normaliseToMidnight(System.currentTimeMillis())
+        return taskDao.getTasksDueOn(today).map { tasks ->
+            val total     = tasks.size
+            val completed = tasks.count { it.isCompleted }
+            TodayProgressState(totalToday = total, completedToday = completed)
         }
     }
+
+    override fun getTodayProgressRatio(): Flow<Float> = getTodayProgress().map { it.ratio }
+
+    // ── Heatmap ─────────────────────────────────────────────────────────
+
+    override fun getHeatMapData(startMs: Long, endMs: Long): Flow<Map<Long, Int>> =
+        taskCompletionLogDao.getLogsBetween(startMs, endMs).map { logs ->
+            logs.groupBy { it.date }.mapValues { (_, v) -> v.size }
+        }
 
     override fun getHeatMapData(): Flow<Map<Long, Int>> =
         dailyProgressDao.getAllHistory().map { rows ->
             rows.associate { it.date to it.tasksCompletedCount }
         }
 
+    // ── Forest ──────────────────────────────────────────────────────────
+
+    override fun getForestData(startMs: Long, endMs: Long): Flow<Map<Long, List<String>>> =
+        taskCompletionLogDao.getRecurringLogsBetween(startMs, endMs).map { entries ->
+            entries.groupBy { it.completionDate }.mapValues { (_, v) ->
+                v.map { it.taskTitle }.distinct()
+            }
+        }
+
+    // ── Home screen ──────────────────────────────────────────────────────
+
+    override fun getHomeScreenTasks(): Flow<List<TaskEntity>> {
+        val todayStart    = normaliseToMidnight(System.currentTimeMillis())
+        val tomorrowStart = todayStart + 86_400_000L
+        return taskDao.getHomeScreenTasks(todayStart, tomorrowStart)
+    }
+
+    override fun getAllCompletedRecurringLogs(): Flow<List<TaskCompletionLog>> =
+        taskCompletionLogDao.getAllCompletedLogs()
+
+    override fun getCompletedNonRecurringTasks(): Flow<List<TaskEntity>> =
+        taskDao.getCompletedNonRecurringTasks()
+
+    // ── Streak & achievement reactive ───────────────────────────────────
+
+    override fun getStreakForTask(taskId: Long): Flow<TaskStreakEntity?> =
+        taskStreakDao.getStreakForTask(taskId)
+
+    override fun getAchievements(): Flow<List<AchievementEntity>> =
+        achievementDao.getAll()
+
     // ── Commands ──────────────────────────────────────────────────────────
 
-    override suspend fun addTask(title: String, startDate: Long, dueDate: Long?, isRecurring: Boolean) {
+    override suspend fun addTask(
+        title: String,
+        startDate: Long,
+        dueDate: Long?,
+        isRecurring: Boolean,
+        scheduleMask: Int?
+    ) {
+        // T046: Validate scheduleMask — must be null (every day) or in 1..127 (valid day-bit combination)
+        val validMask = when {
+            scheduleMask == null -> null
+            scheduleMask in 1..127 -> scheduleMask
+            else -> null // silently clamp invalid values to "every day"
+        }
         taskDao.insertTask(
             TaskEntity(
-                title = title,
-                startDate = normaliseToMidnight(startDate),
-                dueDate = dueDate,
-                isRecurring = isRecurring
+                title        = title,
+                startDate    = normaliseToMidnight(startDate),
+                dueDate      = dueDate,
+                isRecurring  = isRecurring,
+                scheduleMask = if (isRecurring) validMask else null
             )
         )
     }
 
-    /**
-     * Update mutable task fields.
-     * DI-001: completionTimestamp is preserved from the DB record — the caller cannot
-     * overwrite it by passing a different value in the task object.
-     */
     override suspend fun updateTask(task: TaskEntity) {
         val existing = taskDao.getTaskById(task.id) ?: return
         taskDao.updateTask(task.copy(completionTimestamp = existing.completionTimestamp))
     }
 
-    /**
-     * Transition task status following the FSM: TODO→IN_PROGRESS, TODO→COMPLETED,
-     * IN_PROGRESS→COMPLETED, COMPLETED→TODO (undo). All other transitions are no-ops.
-     * DI-001: completionTimestamp is SET once on first → COMPLETED; CLEARED on COMPLETED→TODO.
-     */
     override suspend fun updateTaskStatus(task: TaskEntity, newStatus: TaskStatus) {
         val validTransition = when (task.status) {
             TaskStatus.TODO        -> newStatus == TaskStatus.IN_PROGRESS || newStatus == TaskStatus.COMPLETED
             TaskStatus.IN_PROGRESS -> newStatus == TaskStatus.COMPLETED
-            TaskStatus.COMPLETED   -> newStatus == TaskStatus.TODO  // undo
+            TaskStatus.COMPLETED   -> newStatus == TaskStatus.TODO
         }
         if (!validTransition) return
 
@@ -99,36 +155,128 @@ class TaskRepositoryImpl @Inject constructor(
 
         taskDao.updateTask(task.copy(status = newStatus, completionTimestamp = newTimestamp))
 
-        // Log recurring task completion / un-completion
         if (task.isRecurring) {
             val today = normaliseToMidnight(System.currentTimeMillis())
             taskCompletionLogDao.insertLog(
                 TaskCompletionLog(taskId = task.id, date = today, isCompleted = justCompleted)
             )
+            if (justCompleted) {
+                recalculateStreaks(task.id)
+                checkAndAwardAchievements(task.id)
+            }
         }
 
-        // Keep DailyProgress in sync
+        // T031: global achievement check on every completion
+        if (justCompleted) checkAndAwardAchievements(null)
+
         upsertDailyProgress(normaliseToMidnight(System.currentTimeMillis()))
     }
 
-    /**
-     * T017: Delete task AND all its TaskCompletionLog rows atomically in one transaction.
-     */
     override suspend fun deleteTask(task: TaskEntity) {
         db.withTransaction {
             taskCompletionLogDao.deleteLogsForTask(task.id)
+            taskStreakDao.deleteByTaskId(task.id)
             taskDao.deleteTask(task)
         }
         upsertDailyProgress(normaliseToMidnight(System.currentTimeMillis()))
+    }
+
+    override suspend fun getTaskById(id: Long): TaskEntity? = taskDao.getTaskById(id)
+
+    override suspend fun updateLog(log: TaskCompletionLog) {
+        taskCompletionLogDao.updateLog(log)
+    }
+
+    override suspend fun recalculateStreaks(taskId: Long) {
+        val task = taskDao.getTaskById(taskId) ?: return
+        val logs = taskCompletionLogDao.getCompletedLogsForTask(taskId)
+        val schedule = DayMask.toRecurrenceSchedule(task.scheduleMask)
+        val result   = StreakCalculator.compute(
+            completionDates = logs.map { it.date },
+            schedule        = schedule,
+            today           = LocalDate.now()
+        )
+        taskStreakDao.upsertStreak(
+            TaskStreakEntity(
+                taskId                = taskId,
+                currentStreak         = result.currentStreak,
+                longestStreak         = result.longestStreak,
+                longestStreakStartDate = result.longestStreakStartDate,
+                lastUpdated           = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun checkAndAwardAchievements(taskId: Long?) {
+        db.withTransaction {
+            val now = System.currentTimeMillis()
+
+            if (taskId != null) {
+                val streak = taskStreakDao.getStreakForTask(taskId).firstOrNull()
+                val best   = streak?.longestStreak ?: 0
+                mapOf(
+                    AchievementType.STREAK_10  to 10,
+                    AchievementType.STREAK_30  to 30,
+                    AchievementType.STREAK_100 to 100
+                ).forEach { (type, threshold) ->
+                    if (best >= threshold) {
+                        achievementDao.insertOnConflictIgnore(
+                            AchievementEntity(type = type, taskId = taskId, earnedAt = now)
+                        )
+                    }
+                }
+                val task = taskDao.getTaskById(taskId)
+                val ts   = task?.completionTimestamp
+                val due  = task?.dueDate
+                if (ts != null && due != null && ts < due) {
+                    achievementDao.insertOnConflictIgnore(
+                        AchievementEntity(type = AchievementType.EARLY_FINISH, taskId = taskId, earnedAt = now)
+                    )
+                }
+            }
+
+            val onTimeCount = taskDao.getCompletedOnTimeCount()
+            if (onTimeCount >= 10) {
+                achievementDao.insertOnConflictIgnore(
+                    AchievementEntity(type = AchievementType.ON_TIME_10, taskId = null, earnedAt = now)
+                )
+            }
+
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            val yearStart   = normaliseToMidnight(
+                Calendar.getInstance().apply { set(currentYear, Calendar.JANUARY, 1) }.timeInMillis
+            )
+            val yearEnd     = getEndOfDay(
+                normaliseToMidnight(
+                    Calendar.getInstance().apply { set(currentYear, Calendar.DECEMBER, 31) }.timeInMillis
+                )
+            )
+            val distinctDays = taskCompletionLogDao.getLogsBetween(yearStart, yearEnd)
+                .firstOrNull()
+                ?.filter { it.isCompleted }
+                ?.map { it.date }
+                ?.toSet()
+                ?.size ?: 0
+            if (distinctDays >= 365) {
+                achievementDao.insertOnConflictIgnore(
+                    AchievementEntity(
+                        type        = AchievementType.YEAR_FINISHER,
+                        taskId      = null,
+                        earnedAt    = now,
+                        periodLabel = currentYear.toString()
+                    )
+                )
+            }
+        }
     }
 
     // ── Aggregates ────────────────────────────────────────────────────────
 
     override suspend fun calculateCurrentStreak(): Int {
         val history = dailyProgressDao.getAllHistory().firstOrNull() ?: return 0
-        var streak = 0
+        var streak   = 0
         var expected = normaliseToMidnight(System.currentTimeMillis())
-        for (day in history) { // already DESC
+        for (day in history) {
             if (day.date == expected && day.tasksCompletedCount > 0) {
                 streak++
                 expected -= 86_400_000L
@@ -137,13 +285,27 @@ class TaskRepositoryImpl @Inject constructor(
         return streak
     }
 
+    // ── T016: refreshRecurringTasks with scheduleMask ─────────────────────
+
     override suspend fun refreshRecurringTasks() {
         val allTasks = taskDao.getAllTasks().firstOrNull() ?: return
-        val today = normaliseToMidnight(System.currentTimeMillis())
+        val today       = normaliseToMidnight(System.currentTimeMillis())
+        val calDow      = Calendar.getInstance().apply { timeInMillis = today }.get(Calendar.DAY_OF_WEEK)
+        val todayBit    = calDowToDayMaskBit(calDow)
+
         allTasks.filter { it.isRecurring && it.status == TaskStatus.COMPLETED }.forEach { task ->
             val completedDay = task.completionTimestamp?.let { normaliseToMidnight(it) } ?: 0L
             if (completedDay < today) {
-                taskDao.updateTask(task.copy(status = TaskStatus.TODO, completionTimestamp = null))
+                val mask = task.scheduleMask
+                if (mask != null && (mask and todayBit) == 0) return@forEach
+                taskDao.updateTask(
+                    task.copy(
+                        status              = TaskStatus.TODO,
+                        completionTimestamp = null,
+                        startDate           = today,
+                        dueDate             = today
+                    )
+                )
             }
         }
     }
@@ -161,6 +323,54 @@ class TaskRepositoryImpl @Inject constructor(
         } ?: 0
     }
 
+    override suspend fun getLifetimeStats(): LifetimeStats {
+        val total     = taskDao.getCompletedTaskCount().firstOrNull() ?: 0
+        val onTime    = taskDao.getCompletedOnTimeCount()
+        val onTimePct = if (total == 0) 0f else onTime / total.toFloat()
+        val best      = getBestStreak()
+        val habits    = taskDao.getAllTasks().firstOrNull()?.count { it.isRecurring } ?: 0
+        return LifetimeStats(
+            totalCompleted    = total,
+            onTimeCompleted   = onTime,
+            onTimePct         = onTimePct,
+            longestStreak     = best,
+            uniqueHabitsCount = habits
+        )
+    }
+
+    override suspend fun getCurrentYearStats(): CurrentYearStats {
+        val year  = Calendar.getInstance().get(Calendar.YEAR)
+        val jan1  = normaliseToMidnight(
+            Calendar.getInstance().apply { set(year, Calendar.JANUARY, 1) }.timeInMillis
+        )
+        val dec31 = getEndOfDay(
+            normaliseToMidnight(
+                Calendar.getInstance().apply { set(year, Calendar.DECEMBER, 31) }.timeInMillis
+            )
+        )
+        val logsThisYear      = taskCompletionLogDao.getLogsBetween(jan1, dec31)
+            .firstOrNull()?.filter { it.isCompleted } ?: emptyList()
+        val completedThisYear = logsThisYear.size
+
+        val allTasks = taskDao.getAllTasks().firstOrNull() ?: emptyList()
+        val eligible = allTasks.filter { t ->
+            !t.isRecurring && t.completionTimestamp != null && t.completionTimestamp in jan1..dec31
+        }
+        val onTime = eligible.count { t ->
+            t.completionTimestamp != null && t.dueDate != null && t.completionTimestamp <= t.dueDate
+        }
+        val onTimeRate = if (eligible.isEmpty()) 0f else onTime / eligible.size.toFloat()
+
+        return CurrentYearStats(
+            completedThisYear  = completedThisYear,
+            onTimeRateThisYear = onTimeRate,
+            bestStreakThisYear  = getBestStreak()
+        )
+    }
+
+    override suspend fun getEarliestCompletionDate(): Long? =
+        taskCompletionLogDao.getEarliestCompletionDate()
+
     // ── Private helpers ───────────────────────────────────────────────────
 
     private suspend fun upsertDailyProgress(todayMidnight: Long) {
@@ -169,9 +379,9 @@ class TaskRepositoryImpl @Inject constructor(
         val activeTasks = allTasks.filter { it.startDate <= todayEnd }
         dailyProgressDao.insertOrUpdateProgress(
             DailyProgressEntity(
-                date = todayMidnight,
+                date                = todayMidnight,
                 tasksCompletedCount = activeTasks.count { it.status == TaskStatus.COMPLETED },
-                tasksTotalCount = activeTasks.size
+                tasksTotalCount     = activeTasks.size
             )
         )
     }
@@ -179,10 +389,10 @@ class TaskRepositoryImpl @Inject constructor(
     private fun calculateStreakFromLogs(logs: List<TaskCompletionLog>): Int {
         val completed = logs.filter { it.isCompleted }.sortedByDescending { it.date }
         if (completed.isEmpty()) return 0
-        val today = normaliseToMidnight(System.currentTimeMillis())
+        val today     = normaliseToMidnight(System.currentTimeMillis())
         val yesterday = today - 86_400_000L
         if (completed.first().date != today && completed.first().date != yesterday) return 0
-        var streak = 0
+        var streak   = 0
         var expected = completed.first().date
         for (log in completed) {
             if (log.date == expected) { streak++; expected -= 86_400_000L } else break
@@ -210,4 +420,15 @@ class TaskRepositoryImpl @Inject constructor(
         }.timeInMillis
 
     private fun getEndOfDay(midnight: Long): Long = midnight + 86_399_999L
+
+    private fun calDowToDayMaskBit(calDow: Int): Int = when (calDow) {
+        Calendar.MONDAY    -> DayMask.MON
+        Calendar.TUESDAY   -> DayMask.TUE
+        Calendar.WEDNESDAY -> DayMask.WED
+        Calendar.THURSDAY  -> DayMask.THU
+        Calendar.FRIDAY    -> DayMask.FRI
+        Calendar.SATURDAY  -> DayMask.SAT
+        Calendar.SUNDAY    -> DayMask.SUN
+        else               -> DayMask.ALL
+    }
 }

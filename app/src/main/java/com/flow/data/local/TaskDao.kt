@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks ORDER BY status ASC, createdAt DESC")
+    @Query("SELECT * FROM tasks ORDER BY createdAt ASC")
     fun getAllTasks(): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE id = :id")
@@ -43,4 +43,39 @@ interface TaskDao {
     /** Count tasks whose dueDate has passed and status is still not COMPLETED. */
     @Query("SELECT COUNT(*) FROM tasks WHERE dueDate IS NOT NULL AND dueDate < :now AND status != 'COMPLETED'")
     suspend fun getMissedDeadlineCount(now: Long): Int
+
+    /**
+     * T002 — Home-screen filtered list (4-rule logic, FR-004):
+     *  1. Recurring tasks (always shown)
+     *  2. Dated tasks due today
+     *  3. Overdue dated tasks (due before today, not yet completed)
+     *  4. General undated non-recurring tasks (incomplete, or completed today)
+     */
+    @Query("""
+        SELECT * FROM tasks
+        WHERE
+            isRecurring = 1
+            OR (dueDate IS NOT NULL AND dueDate >= :todayStart AND dueDate < :tomorrowStart)
+            OR (dueDate IS NOT NULL AND dueDate < :todayStart AND status != 'COMPLETED')
+            OR (dueDate IS NULL AND isRecurring = 0
+                AND (status != 'COMPLETED'
+                     OR (completionTimestamp IS NOT NULL AND completionTimestamp >= :todayStart)))
+        ORDER BY createdAt ASC
+    """)
+    fun getHomeScreenTasks(todayStart: Long, tomorrowStart: Long): Flow<List<TaskEntity>>
+
+    /** T003 — All completed non-recurring tasks (for global history), ordered by completion time. */
+    @Query("""
+        SELECT * FROM tasks
+        WHERE completionTimestamp IS NOT NULL AND isRecurring = 0
+        ORDER BY completionTimestamp DESC
+    """)
+    fun getCompletedNonRecurringTasks(): Flow<List<TaskEntity>>
+
+    /**
+     * FR-001: Tasks with dueDate exactly equal to today's midnight epoch.
+     * Used by getTodayProgress() to count only tasks actually due today.
+     */
+    @Query("SELECT * FROM tasks WHERE dueDate = :todayMidnight")
+    fun getTasksDueOn(todayMidnight: Long): Flow<List<TaskEntity>>
 }

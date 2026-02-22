@@ -50,6 +50,22 @@ google-services.json
 
 # Logs
 *.log
+build_log*.txt
+
+# Temporary build/test output files — must live in logs/ not at repo root
+logs/
+*.out.txt
+*_out.txt
+*_out2.txt
+*_result.txt
+*_output.txt
+build_output*.txt
+build_result*.txt
+final_build*.txt
+test_final*.txt
+device_test*.txt
+unit_test_out*.txt
+instrumented_out*.txt
 
 # Android Studio
 .idea/

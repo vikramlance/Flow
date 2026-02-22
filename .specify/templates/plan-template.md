@@ -34,6 +34,8 @@
 - **Additive Logic (Non-Regression)**: List existing user flows affected and how you'll verify they still work.
 - **Data Integrity**: Document any data model changes, migrations, and invariants to preserve.
 - **Consistency**: Confirm architecture boundaries (UI → VM → repository → storage) and state modelling.
+- **Security**: Confirm (a) no personal info or credentials added to tracked files; (b) `.gitignore` covers any new sensitive files; (c) new code uses parameterized queries, HTTPS, and no sensitive production logging; (d) new dependencies checked for CVEs.
+- **Testing**: Confirm (a) unit tests planned for all new/modified logic in `src/test/`; (b) instrumented tests planned for DAOs, repository contracts, and UI components with side effects in `src/androidTest/`; (c) at least one end-to-end scenario covers each critical user journey on device; (d) no tier may be replaced by a "manual testing" task.
 
 ## Project Structure
 

@@ -29,7 +29,7 @@ fun TaskHistoryScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val task = uiState.tasks.find { it.id == taskId }
+    val task = uiState.homeTasks.find { it.task.id == taskId }?.task
     val history by viewModel.getTaskHistory(taskId).collectAsState(initial = emptyList())
     val streak by viewModel.getRawTaskStreak(taskId).collectAsState(initial = 0)
 
