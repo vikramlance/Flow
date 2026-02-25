@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +29,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,81 +53,170 @@ fun AnalyticsScreen(
         },
         containerColor = SurfaceDark
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .padding(horizontal = 16.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
+        val pagerState    = rememberPagerState(pageCount = { 4 })
+        val coroutineScope = rememberCoroutineScope()
+
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // T027/FR-007: 4-tab pill row synced to pager
+            PillTabRow(
+                selectedPage = pagerState.currentPage,
+                onSelect     = { idx -> coroutineScope.launch { pagerState.animateScrollToPage(idx) } }
+            )
+
             if (uiState.isLoading) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = NeonGreen)
-                    }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = NeonGreen)
                 }
             } else {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    PeriodSelectorRow(
-                        selected       = uiState.selectedPeriod,
-                        availableYears = uiState.availableYears,
-                        onSelect       = viewModel::onPeriodSelected
-                    )
-                }
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatChip("Total",   uiState.totalCompleted.toString(), NeonGreen,      Modifier.weight(1f))
-                        StatChip("On Time", uiState.completedOnTime.toString(), TaskInProgress, Modifier.weight(1f))
-                        StatChip("Missed",  uiState.missedDeadlines.toString(), TaskOverdue,   Modifier.weight(1f))
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatChip("Streak", "${uiState.currentStreak}d", NeonGreen,                   Modifier.weight(1f))
-                        StatChip("Best",   "${uiState.bestStreak}d",   NeonGreen.copy(alpha = 0.7f), Modifier.weight(1f))
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-                item {
-                    Text("Contribution Graph", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark), modifier = Modifier.fillMaxWidth()) {
-                        ContributionHeatmap(uiState.heatMapData)
-                    }
-                }
-                uiState.lifetimeStats?.let { ls ->
-                    item {
-                        Text("Lifetime Stats", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatChip("Done",    ls.totalCompleted.toString(),       NeonGreen,      Modifier.weight(1f))
-                            StatChip("On Time", "${(ls.onTimePct * 100).toInt()}%", TaskInProgress, Modifier.weight(1f))
-                            StatChip("Best", "${ls.longestStreak}d",                NeonGreen.copy(alpha = 0.7f), Modifier.weight(1f))
+                // T028/FR-007: HorizontalPager with 4 content pages
+                HorizontalPager(
+                    state    = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    when (page) {
+                        // Page 0: Graph / Contribution Heatmap
+                        0 -> LazyColumn(
+                            modifier         = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding   = PaddingValues(bottom = 24.dp, top = 8.dp)
+                        ) {
+                            item {
+                                PeriodSelectorRow(
+                                    selected       = uiState.selectedPeriod,
+                                    availableYears = uiState.availableYears,
+                                    onSelect       = viewModel::onPeriodSelected
+                                )
+                            }
+                            item {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    StatChip("Total",   uiState.totalCompleted.toString(), NeonGreen,      Modifier.weight(1f))
+                                    StatChip("On Time", uiState.completedOnTime.toString(), TaskInProgress, Modifier.weight(1f))
+                                    StatChip("Missed",  uiState.missedDeadlines.toString(), TaskOverdue,   Modifier.weight(1f))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    StatChip("Streak", "${uiState.currentStreak}d", NeonGreen,                   Modifier.weight(1f))
+                                    StatChip("Best",   "${uiState.bestStreak}d",   NeonGreen.copy(alpha = 0.7f), Modifier.weight(1f))
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                            item {
+                                Text("Contribution Graph", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark), modifier = Modifier.fillMaxWidth()) {
+                                    ContributionHeatmap(uiState.heatMapData)
+                                }
+                            }
+                            if (uiState.achievements.isNotEmpty()) {
+                                item { AchievementsSection(uiState.achievements) }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        StatChip("Unique Habits", ls.uniqueHabitsCount.toString(), NeonGreen.copy(alpha = 0.5f))
-                    }
-                }
-                uiState.currentYearStats?.let { cy ->
-                    item {
-                        Text("This Year (${Calendar.getInstance().get(Calendar.YEAR)})",
-                            style = MaterialTheme.typography.titleMedium, color = Color.White)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatChip("Done",    cy.completedThisYear.toString(),             NeonGreen,      Modifier.weight(1f))
-                            StatChip("On Time", "${(cy.onTimeRateThisYear * 100).toInt()}%", TaskInProgress, Modifier.weight(1f))
-                            StatChip("Best",    "${cy.bestStreakThisYear}d",                  NeonGreen.copy(alpha = 0.7f), Modifier.weight(1f))
+
+                        // Page 1: Lifetime Stats
+                        1 -> LazyColumn(
+                            modifier         = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding   = PaddingValues(bottom = 24.dp, top = 8.dp)
+                        ) {
+                            uiState.lifetimeStats?.let { ls ->
+                                item {
+                                    Text("Lifetime Stats", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        StatChip("Done",    ls.totalCompleted.toString(),       NeonGreen,      Modifier.weight(1f))
+                                        StatChip("On Time", "${(ls.onTimePct * 100).toInt()}%", TaskInProgress, Modifier.weight(1f))
+                                        StatChip("Best", "${ls.longestStreak}d",                NeonGreen.copy(alpha = 0.7f), Modifier.weight(1f))
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    StatChip("Unique Habits", ls.uniqueHabitsCount.toString(), NeonGreen.copy(alpha = 0.5f))
+                                }
+                            } ?: item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                    Text("No lifetime data yet", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
                         }
+
+                        // Page 2: This Year
+                        2 -> LazyColumn(
+                            modifier         = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding   = PaddingValues(bottom = 24.dp, top = 8.dp)
+                        ) {
+                            uiState.currentYearStats?.let { cy ->
+                                item {
+                                    Text("This Year (${Calendar.getInstance().get(Calendar.YEAR)})",
+                                        style = MaterialTheme.typography.titleMedium, color = Color.White)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        StatChip("Done",    cy.completedThisYear.toString(),             NeonGreen,      Modifier.weight(1f))
+                                        StatChip("On Time", "${(cy.onTimeRateThisYear * 100).toInt()}%", TaskInProgress, Modifier.weight(1f))
+                                        StatChip("Best",    "${cy.bestStreakThisYear}d",                  NeonGreen.copy(alpha = 0.7f), Modifier.weight(1f))
+                                    }
+                                }
+                            } ?: item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                                    Text("No data for this year yet", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
+                        }
+
+                        // Page 3: Forest
+                        3 -> LazyColumn(
+                            modifier         = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding   = PaddingValues(bottom = 24.dp, top = 8.dp)
+                        ) {
+                            item {
+                                ForestSection(
+                                    forestData     = uiState.forestData,
+                                    forestTreeCount = uiState.forestTreeCount,
+                                    bestStreak     = uiState.bestStreak
+                                )
+                            }
+                        }
+
+                        else -> Box(modifier = Modifier.fillMaxSize())
                     }
-                }
-                if (uiState.achievements.isNotEmpty()) {
-                    item { AchievementsSection(uiState.achievements) }
-                }
-                item {
-                    ForestSection(forestData = uiState.forestData, forestTreeCount = uiState.forestTreeCount)
                 }
             }
+        }
+    }
+}
+
+// ── T027/FR-007: Pill tab row synced to HorizontalPager ──────────────────────
+
+@Composable
+fun PillTabRow(
+    selectedPage: Int,
+    onSelect: (Int) -> Unit
+) {
+    val tabs = listOf("Graph", "Lifetime", "This Year", "Forest")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        tabs.forEachIndexed { index, label ->
+            FilterChip(
+                selected = selectedPage == index,
+                onClick  = { onSelect(index) },
+                label    = { Text(label) },
+                colors   = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonGreen,
+                    selectedLabelColor     = Color.Black,
+                    containerColor         = Color.Transparent,
+                    labelColor             = NeonGreen
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled  = true,
+                    selected = selectedPage == index,
+                    borderColor         = NeonGreen.copy(alpha = 0.5f),
+                    selectedBorderColor = NeonGreen
+                )
+            )
         }
     }
 }
@@ -229,12 +321,13 @@ private fun achievementName(type: AchievementType): String = when (type) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ForestSection(forestData: Map<Long, List<String>>, forestTreeCount: Int) {
+fun ForestSection(forestData: Map<Long, List<String>>, forestTreeCount: Int, bestStreak: Int = 0) {
     var selectedDayTitles by remember { mutableStateOf<List<String>?>(null) }
     var selectedDayLabel  by remember { mutableStateOf("") }
     Text("Your Forest ", style = MaterialTheme.typography.titleMedium, color = Color.White)
     Spacer(modifier = Modifier.height(4.dp))
     Text("Your forest: $forestTreeCount trees", style = MaterialTheme.typography.bodyMedium, color = NeonGreen, fontWeight = FontWeight.Bold)
+    Text("Best streak: $bestStreak days", style = MaterialTheme.typography.bodySmall, color = NeonGreen.copy(alpha = 0.75f))
     Spacer(modifier = Modifier.height(8.dp))
     ForestHeatmap(forestData = forestData, onDayClick = { dayMs, titles ->
         val sdf = SimpleDateFormat("MMM d", Locale.getDefault())
@@ -299,7 +392,13 @@ fun ForestHeatmap(forestData: Map<Long, List<String>>, onDayClick: (Long, List<S
                                 val dayKey = normaliseToMidnight(gridCal.timeInMillis)
                                 val titles = forestData[dayKey] ?: emptyList()
                                 val count  = titles.size
-                                Box(modifier = Modifier.size(cellSize).background(forestCellColor(count), RoundedCornerShape(2.dp)).clickable { onDayClick(dayKey, titles) })
+                                // T029/FR-008: emoji tree cells replace colored squares
+                                Text(
+                                    text   = if (count == 0) "·" else "\uD83C\uDF32".repeat(count.coerceAtMost(4)),
+                                    style  = MaterialTheme.typography.labelSmall,
+                                    color  = if (count == 0) Color.Gray else Color.Unspecified,
+                                    modifier = Modifier.size(cellSize).clickable { onDayClick(dayKey, titles) }
+                                )
                                 gridCal.add(Calendar.DAY_OF_YEAR, 1)
                             }
                         }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.flow.data.local.TaskCompletionLog
 import com.flow.data.local.TaskEntity
+import com.flow.data.local.TaskStatus
 import com.flow.data.repository.TaskRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +84,59 @@ class GlobalHistoryViewModel @Inject constructor(
     /** Clear the current edit error message. */
     fun clearEditError() =
         _uiState.update { it.copy(editError = null) }
+
+    // ── T020/FR-005: Task edit from history ──────────────────────────────────
+
+    /**
+     * Open the [TaskEditSheet] for the given task.
+     * If the task no longer exists (deleted), set error and DO NOT open the sheet.
+     */
+    fun openEditTask(taskId: Long) {
+        viewModelScope.launch {
+            val task = repository.getTaskById(taskId)
+            if (task == null) {
+                _uiState.update { it.copy(error = "Task not found") }
+            } else {
+                _uiState.update { it.copy(editingTask = task, error = null) }
+            }
+        }
+    }
+
+    /** Dismiss the TaskEditSheet without saving. */
+    fun dismissEditTask() =
+        _uiState.update { it.copy(editingTask = null) }
+
+    /**
+     * Validate and save an edited [TaskEntity] from the history edit sheet.
+     *
+     * (a) If the new status is not COMPLETED, clear completionTimestamp so the task
+     *     disappears from [getCompletedNonRecurringTasks()].
+     * (b) Calls repository.updateTaskStatus() to handle completionTimestamp side-effects,
+     *     then repository.updateTask() (which normalises dueDate internally).
+     */
+    fun saveEditTask(updated: TaskEntity) {
+        viewModelScope.launch {
+            // Step (a): status side-effect (sets/clears completionTimestamp)
+            repository.updateTaskStatus(updated, updated.status)
+            // Step (b): persist all other field changes, preserving the
+            // completionTimestamp that updateTaskStatus just set/cleared
+            repository.updateTask(
+                updated.copy(
+                    completionTimestamp = if (updated.status == TaskStatus.COMPLETED) updated.completionTimestamp else null,
+                    dueDate = updated.dueDate?.let { normaliseToMidnight(it) }
+                )
+            )
+            _uiState.update { it.copy(editingTask = null) }
+        }
+    }
+
+    /** Open the action bottom sheet for a recurring-task long-press. */
+    fun openActionSheet(item: HistoryItem) =
+        _uiState.update { it.copy(showActionSheet = true, actionSheetTarget = item) }
+
+    /** Dismiss the action bottom sheet without taking any action. */
+    fun dismissActionSheet() =
+        _uiState.update { it.copy(showActionSheet = false, actionSheetTarget = null) }
 
     /**
      * T035: Validate and save an edited [TaskCompletionLog].

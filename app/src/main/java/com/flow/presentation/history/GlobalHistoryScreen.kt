@@ -1,6 +1,7 @@
 package com.flow.presentation.history
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -20,9 +21,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.flow.data.local.TaskCompletionLog
+import com.flow.data.local.TaskEntity
+import com.flow.data.local.TaskStatus
 import com.flow.ui.theme.NeonGreen
 import com.flow.ui.theme.SurfaceDark
 import com.flow.ui.theme.TaskInProgress
+import com.flow.util.utcDateToLocalMidnight
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -207,30 +211,18 @@ fun GlobalHistoryScreen(
                 }
             } else if (state.viewMode == HistoryViewMode.DATE_GROUPED) {
                 DateGroupedList(displayItems, onLongClick = { item ->
-                    item.logId?.let { lid ->
-                        viewModel.openEditLog(
-                            TaskCompletionLog(
-                                id = lid,
-                                taskId = item.taskId,
-                                date = item.completedDayMidnight,
-                                isCompleted = true,
-                                timestamp = item.completedAtMs
-                            )
-                        )
+                    if (item.isRecurring) {
+                        viewModel.openActionSheet(item)
+                    } else {
+                        viewModel.openEditTask(item.taskId)
                     }
                 })
             } else {
                 ChronologicalList(displayItems, onLongClick = { item ->
-                    item.logId?.let { lid ->
-                        viewModel.openEditLog(
-                            TaskCompletionLog(
-                                id = lid,
-                                taskId = item.taskId,
-                                date = item.completedDayMidnight,
-                                isCompleted = true,
-                                timestamp = item.completedAtMs
-                            )
-                        )
+                    if (item.isRecurring) {
+                        viewModel.openActionSheet(item)
+                    } else {
+                        viewModel.openEditTask(item.taskId)
                     }
                 })
             }
@@ -244,6 +236,66 @@ fun GlobalHistoryScreen(
                 editError = state.editError,
                 onDismiss = { viewModel.dismissEditLog() },
                 onSave = { updatedLog -> viewModel.updateLogEntry(updatedLog) }
+            )
+        }
+
+        // T023/FR-005: Action sheet for recurring long-press
+        if (state.showActionSheet) {
+            val target = state.actionSheetTarget
+            ModalBottomSheet(
+                onDismissRequest = { viewModel.dismissActionSheet() },
+                containerColor = SurfaceDark
+            ) {
+                Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                    Text(
+                        text = "Edit history entry",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Edit this day's log", color = Color.White) },
+                        supportingContent = { Text("Change the completion date of this entry", color = Color.Gray) },
+                        modifier = Modifier.clickable {
+                            if (target != null) {
+                                target.logId?.let { lid ->
+                                    viewModel.openEditLog(
+                                        TaskCompletionLog(
+                                            id = lid,
+                                            taskId = target.taskId,
+                                            date = target.completedDayMidnight,
+                                            isCompleted = true,
+                                            timestamp = target.completedAtMs
+                                        )
+                                    )
+                                }
+                            }
+                            viewModel.dismissActionSheet()
+                        },
+                        colors = ListItemDefaults.colors(containerColor = SurfaceDark)
+                    )
+                    ListItem(
+                        headlineContent = { Text("Edit task", color = Color.White) },
+                        supportingContent = { Text("Change title, dates, or status of the task", color = Color.Gray) },
+                        modifier = Modifier.clickable {
+                            if (target != null) {
+                                viewModel.openEditTask(target.taskId)
+                            }
+                            viewModel.dismissActionSheet()
+                        },
+                        colors = ListItemDefaults.colors(containerColor = SurfaceDark)
+                    )
+                }
+            }
+        }
+
+        // T024/FR-006: Task edit sheet
+        val editingTask = state.editingTask
+        if (editingTask != null) {
+            TaskEditSheet(
+                task = editingTask,
+                onSave = { updatedTask -> viewModel.saveEditTask(updatedTask) },
+                onDismiss = { viewModel.dismissEditTask() }
             )
         }
     }
@@ -431,6 +483,165 @@ private fun HistoryEditDialog(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
             )
+        }
+    }
+}
+
+// ── T021/FR-005: Task edit bottom sheet ──────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskEditSheet(
+    task: TaskEntity,
+    onSave: (TaskEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var title    by remember { mutableStateOf(task.title) }
+    var startDateMs by remember { mutableStateOf(task.startDate) }
+    var dueDateMs   by remember(task) { mutableStateOf(task.dueDate) }
+    var status   by remember { mutableStateOf(task.status) }
+
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showDueDatePicker   by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SurfaceDark) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Edit Task", style = MaterialTheme.typography.titleMedium, color = NeonGreen, fontWeight = FontWeight.Bold)
+
+            // Title
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Title", color = Color.Gray) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NeonGreen,
+                    unfocusedBorderColor = Color.Gray,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Start date
+            val startFmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+            OutlinedButton(
+                onClick = { showStartDatePicker = true },
+                border = BorderStroke(1.dp, Color.Gray),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Start: ${startFmt.format(Date(startDateMs))}", color = Color.White)
+            }
+
+            // Due date
+            OutlinedButton(
+                onClick = { showDueDatePicker = true },
+                border = BorderStroke(1.dp, Color.Gray),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val label = dueDateMs?.let { "Due: ${startFmt.format(Date(it))}" } ?: "Due: not set"
+                Text(label, color = Color.White)
+            }
+
+            // Status chips
+            Text("Status", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED).forEach { s ->
+                    FilterChip(
+                        selected = status == s,
+                        onClick = { status = s },
+                        label = { Text(s.name) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = NeonGreen,
+                            selectedLabelColor = Color.Black
+                        )
+                    )
+                }
+            }
+
+            // Save / Cancel
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, Color.Gray)) {
+                    Text("Cancel", color = Color.Gray)
+                }
+                Button(
+                    onClick = {
+                        if (title.isNotBlank()) {
+                            onSave(task.copy(title = title, startDate = startDateMs, dueDate = dueDateMs, status = status))
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Save")
+                }
+            }
+        }
+    }
+
+    // Start date picker
+    if (showStartDatePicker) {
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = startDateMs)
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let {
+                        startDateMs = utcDateToLocalMidnight(it)
+                        showStartDatePicker = false
+                    }
+                }) { Text("OK", color = NeonGreen) }
+            },
+            dismissButton = { TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel", color = Color.Gray) } },
+            colors = DatePickerDefaults.colors(containerColor = SurfaceDark)
+        ) {
+            DatePicker(state = pickerState, colors = DatePickerDefaults.colors(
+                containerColor = SurfaceDark, titleContentColor = Color.White,
+                headlineContentColor = NeonGreen, weekdayContentColor = Color.Gray,
+                dayContentColor = Color.White, selectedDayContainerColor = NeonGreen,
+                selectedDayContentColor = Color.Black, todayContentColor = NeonGreen,
+                todayDateBorderColor = NeonGreen
+            ))
+        }
+    }
+
+    // Due date picker
+    if (showDueDatePicker) {
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = dueDateMs ?: System.currentTimeMillis())
+        DatePickerDialog(
+            onDismissRequest = { showDueDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let {
+                        dueDateMs = utcDateToLocalMidnight(it)
+                        showDueDatePicker = false
+                    }
+                }) { Text("OK", color = NeonGreen) }
+            },
+            dismissButton = {
+                Column {
+                    TextButton(onClick = { dueDateMs = null; showDueDatePicker = false }) { Text("Clear", color = Color.Gray) }
+                    TextButton(onClick = { showDueDatePicker = false }) { Text("Cancel", color = Color.Gray) }
+                }
+            },
+            colors = DatePickerDefaults.colors(containerColor = SurfaceDark)
+        ) {
+            DatePicker(state = pickerState, colors = DatePickerDefaults.colors(
+                containerColor = SurfaceDark, titleContentColor = Color.White,
+                headlineContentColor = NeonGreen, weekdayContentColor = Color.Gray,
+                dayContentColor = Color.White, selectedDayContainerColor = NeonGreen,
+                selectedDayContentColor = Color.Black, todayContentColor = NeonGreen,
+                todayDateBorderColor = NeonGreen
+            ))
         }
     }
 }

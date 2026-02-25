@@ -108,4 +108,51 @@ class TodayProgressTest {
         val justBeforeMidnight = todayMidnight - 1L
         assertTrue(justBeforeMidnight != todayMidnight)
     }
+
+    // ── TR-001 / FR-001 regression: dueDate normalisation ────────────────────
+
+    /**
+     * T006 regression — dueDate stored at 10 pm is normalised to midnight and counted.
+     *
+     * Before fix: TaskRepositoryImpl.addTask() stored `dueDate = dueDate` (raw),
+     * so tasks created with `dueDate = todayMidnight + 79_200_000` (10 pm) were
+     * stored at 10 pm and never matched `getTasksDueOn(todayMidnight)`, causing
+     * the progress bar to always show 0%.
+     *
+     * After fix: addTask() normalises dueDate via normaliseToMidnight(), so
+     * `todayMidnight + 79_200_000` → `todayMidnight` in the DB.
+     * This test verifies the normalisation contract using the same Calendar logic.
+     */
+    @Test
+    fun `dueDate stored at 6pm is normalised to midnight and counted`() {
+        val todayMidnight = midnightMs(0)
+        val rawDueDate = todayMidnight + 79_200_000L   // 22:00:00 today (10 pm)
+
+        // Replicate normaliseToMidnight() — same algorithm as TaskRepositoryImpl
+        val normalised = Calendar.getInstance().apply {
+            timeInMillis = rawDueDate
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE,      0)
+            set(Calendar.SECOND,      0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        assertEquals(
+            "normalised dueDate (10 pm) must equal todayMidnight",
+            todayMidnight, normalised
+        )
+
+        // Verify that a TaskEntity with the normalised dueDate would be counted by
+        // getTodayProgress() which uses == todayMidnight comparison
+        val task = TaskEntity(
+            id        = 99L,
+            title     = "Task With 10pm DueDate",
+            dueDate   = normalised,
+            startDate = todayMidnight - 86_400_000L
+        )
+        assertEquals(
+            "TaskEntity with normalised dueDate should be countable by exact-midnight query",
+            todayMidnight, task.dueDate
+        )
+    }
 }

@@ -44,6 +44,8 @@ data class HomeTaskItem(
 data class HomeUiState(
     /** Mapped task list with per-item urgency colours. */
     val homeTasks: List<HomeTaskItem> = emptyList(),
+    /** Future-dated tasks (dueDate >= tomorrow, not completed) for the Upcoming section. */
+    val upcomingTasks: List<HomeTaskItem> = emptyList(),
     /** Today-focused progress (FR-001). */
     val todayProgressState: TodayProgressState = TodayProgressState(0, 0),
     val isFirstLaunch: Boolean = false,

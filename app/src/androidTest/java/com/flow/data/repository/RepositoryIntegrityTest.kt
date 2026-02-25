@@ -8,6 +8,7 @@ import com.flow.data.local.TaskCompletionLog
 import com.flow.data.local.TaskEntity
 import com.flow.data.local.TaskStreakEntity
 import kotlinx.coroutines.flow.first
+import java.util.Calendar
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -143,5 +144,45 @@ class RepositoryIntegrityTest {
         val s = db.taskStreakDao().getStreakForTask(1L).first()!!
         assertTrue("streak=${ s.currentStreak} <= completedCount=$completedCount",
             s.currentStreak <= completedCount)
+    }
+
+    // ── T009: US1 — addTask round-trip: dueDate=today is counted by getTodayProgress ──
+
+    /**
+     * T009 — addTask with dueDate=today is counted by getTodayProgress.
+     *
+     * Verifies the full round-trip:
+     *  1. addTask() normalises dueDate to midnight (FR-001 fix)
+     *  2. getTodayProgress() counts it via getTasksDueOn(normaliseToMidnight(now))
+     * Result: totalToday = 1.
+     */
+    @Test
+    fun addTask_with_dueDate_today_then_getTodayProgress_counts_it() = runTest {
+        val todayMidnight = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val repo = TaskRepositoryImpl(
+            db                  = db,
+            taskDao             = db.taskDao(),
+            dailyProgressDao    = db.dailyProgressDao(),
+            taskCompletionLogDao = db.taskCompletionLogDao(),
+            taskStreakDao       = db.taskStreakDao(),
+            achievementDao      = db.achievementDao()
+        )
+
+        // Add task with dueDate = 10 pm today (non-midnight raw value).
+        // After T003 fix, addTask() normalises this to todayMidnight.
+        repo.addTask(
+            title       = "Round-trip task",
+            startDate   = todayMidnight,
+            isRecurring = false,
+            dueDate     = todayMidnight + 79_200_000L,  // 10 pm today
+            scheduleMask = null
+        )
+
+        val progress = repo.getTodayProgress().first()
+        assertEquals("totalToday should be 1 after adding a dueDate=today task", 1, progress.totalToday)
     }
 }

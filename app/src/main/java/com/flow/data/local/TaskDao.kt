@@ -45,11 +45,12 @@ interface TaskDao {
     suspend fun getMissedDeadlineCount(now: Long): Int
 
     /**
-     * T002 — Home-screen filtered list (4-rule logic, FR-004):
+     * T002 — Home-screen filtered list (5-rule logic, FR-003/FR-004):
      *  1. Recurring tasks (always shown)
      *  2. Dated tasks due today
      *  3. Overdue dated tasks (due before today, not yet completed)
      *  4. General undated non-recurring tasks (incomplete, or completed today)
+     *  5. Future dated tasks (dueDate >= tomorrow, not yet completed) — FR-003
      */
     @Query("""
         SELECT * FROM tasks
@@ -60,6 +61,7 @@ interface TaskDao {
             OR (dueDate IS NULL AND isRecurring = 0
                 AND (status != 'COMPLETED'
                      OR (completionTimestamp IS NOT NULL AND completionTimestamp >= :todayStart)))
+            OR (dueDate IS NOT NULL AND dueDate >= :tomorrowStart AND status != 'COMPLETED')
         ORDER BY createdAt ASC
     """)
     fun getHomeScreenTasks(todayStart: Long, tomorrowStart: Long): Flow<List<TaskEntity>>

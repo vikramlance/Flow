@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -252,6 +253,133 @@ class GlobalHistoryViewModelTest {
         assertTrue(state.showAll)
         assertEquals(null, state.selectedDateMidnight)
         assertEquals(HistoryViewMode.CHRONOLOGICAL, state.viewMode)
+        job.cancel()
+    }
+
+    // ── T025-a: openActionSheet sets showActionSheet = true ────────────────────
+
+    @Test
+    fun `openActionSheet sets showActionSheet true with target`() = runTest {
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        val item = HistoryItem(
+            taskId = 1L, taskTitle = "Recurring", targetDate = null,
+            completedDayMidnight = today, completedAtMs = today + 1000, isRecurring = true
+        )
+        vm.openActionSheet(item)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertTrue(state.showActionSheet)
+        assertEquals(item, state.actionSheetTarget)
+        job.cancel()
+    }
+
+    // ── T025-b: openEditTask fetches task by ID ────────────────────────────────
+
+    @Test
+    fun `openEditTask fetches task by id and sets editingTask`() = runTest {
+        val task = makeNonRecurringTask(42L, "My Task", completedAt = today)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.openEditTask(42L)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(task, state.editingTask)
+        assertEquals(null, state.error)
+        job.cancel()
+    }
+
+    // ── T025-c: saveEditTask calls repository updateTask ──────────────────────
+
+    @Test
+    fun `saveEditTask calls repository updateTask`() = runTest {
+        val task = makeNonRecurringTask(55L, "Original", completedAt = today)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        val updated = task.copy(title = "Updated")
+        vm.saveEditTask(updated)
+        advanceUntilIdle()
+
+        // After save, editingTask should be cleared
+        assertEquals(null, vm.uiState.value.editingTask)
+        // The title should be updated in the repo
+        val inRepo = fakeRepo.allTasksFlow.value.find { it.id == 55L }
+        assertEquals("Updated", inRepo?.title)
+        job.cancel()
+    }
+
+    // ── T025-d: dismissEditTask clears editingTask ─────────────────────────────
+
+    @Test
+    fun `dismissEditTask clears editingTask`() = runTest {
+        val task = makeNonRecurringTask(7L, "Task", completedAt = today)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.openEditTask(7L)
+        advanceUntilIdle()
+        assertNotNull(vm.uiState.value.editingTask)
+
+        vm.dismissEditTask()
+        advanceUntilIdle()
+        assertEquals(null, vm.uiState.value.editingTask)
+        job.cancel()
+    }
+
+    // ── T025-e: saveEditTask with status TODO clears completionTimestamp ────────
+
+    @Test
+    fun `saveEditTask with status TODO clears completionTimestamp`() = runTest {
+        val task = makeNonRecurringTask(8L, "Task", completedAt = today + 5000)
+            .copy(status = com.flow.data.local.TaskStatus.COMPLETED)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        // Revert to TODO — completionTimestamp should be cleared after save
+        val reverted = task.copy(status = com.flow.data.local.TaskStatus.TODO)
+        vm.saveEditTask(reverted)
+        advanceUntilIdle()
+
+        val inRepo = fakeRepo.allTasksFlow.value.find { it.id == 8L }
+        assertEquals(null, inRepo?.completionTimestamp)
+        job.cancel()
+    }
+
+    // ── T025-f: openEditTask with deleted task sets error, not editingTask ──────
+
+    @Test
+    fun `openEditTask with non-existent task sets error not editingTask`() = runTest {
+        // No tasks in repo
+        fakeRepo.allTasksFlow.value = emptyList()
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.openEditTask(999L) // Non-existent ID
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(null, state.editingTask)
+        assertEquals("Task not found", state.error)
         job.cancel()
     }
 }

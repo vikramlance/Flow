@@ -8,8 +8,8 @@ Sync Impact Report
 - Version change: 1.2.1 → 1.3.0 (MINOR: promoted Testing to Gate 5 (mandatory); added Test Execution
   Protocol with 4-tier pyramid, device detection/wait loop, AVD fallback, and anti-patterns;
   replaced thin bottom "## Testing" stub; updated plan-template.md and tasks-template.md)
-- Version change: 1.3.0 → 1.3.1 (PATCH: added Repository Hygiene rule — temporary/output/log files
-  must live in logs/ which is .gitignored; never place them at repo root)
+- Version change: 1.3.1 → 1.3.2 (PATCH: added Regression Testing Protocol — red-green
+  regression tests required for every bug fix; tests must target the root-cause layer)
 - Principles established:
   - I. Additive Logic (Non-Regression)
   - II. Data Integrity (Single Source of Truth)
@@ -346,6 +346,53 @@ Start-Process -NoNewWindow "$env:ANDROID_HOME\emulator\emulator" `
 | Marking a change complete before all tiers pass | Violates Gate 5 and the Additive Logic gate simultaneously. |
 | Running only the changed-module tests to "save time" | All tiers MUST run on the full project; partial runs are informational only. |
 
+## Regression Testing Protocol
+
+Every bug fix MUST include at least one regression test that:
+
+1. **Fails on the unfixed code** (demonstrates the bug is present) and
+   **passes after the fix** (demonstrates the fix works). This is the
+   red-then-green discipline.
+2. **Targets the root-cause layer** — if the bug is in a DAO query, the
+   test MUST assert against the DAO or repository, not just the ViewModel.
+   ViewModel-level tests that pass through a fake repository do NOT
+   substitute for a root-cause test.
+3. **Uses a descriptive name** that references the bug. Naming convention:
+   `<scenario>_<when>_<expectedBehaviour>`. Example:
+   `taskWithDueDateToday_addedAt6pm_isCountedInTodayProgress`.
+4. **Lives in the lowest viable test tier**:
+   - Pure logic bugs → `src/test/` (JVM unit test)
+   - DAO query bugs → `src/androidTest/` (instrumented DAO test)
+   - UI interaction bugs → `src/androidTest/` (Compose UI test)
+5. **Is added before or with the fix** — a fix without a regression test is
+   **incomplete** and MUST NOT be merged.
+
+**After any change that touches business logic**, the author MUST:
+- Run Tier 1 (unit) and confirm zero failures.
+- Run Tier 2 compile gate, then the full instrumented suite on device.
+- If new regression tests were added, explicitly confirm that they were
+  red (failing) against the pre-fix code before applying the fix.
+
+**Why existing tests missed a bug** MUST be documented as a one-line
+comment in the new regression test, e.g.:
+```kotlin
+// Regression: existing HomeViewModelTest used a fake repository that
+// bypassed normaliseToMidnight; the bug was in the repository write path.
+```
+
+**Prohibited**:
+- Closing a bug fix PR/commit without a regression test.
+- Regression tests that only test the happy path at a higher layer
+  (e.g., a ViewModel test that uses a pre-seeded fake).
+- Retroactively adding tests to green code without first verifying they
+  would have been red on the buggy code.
+
+**Rationale**: Without targeted regression tests, the same bug class
+recurs. The existing test suite missed the `dueDate` normalisation bug
+because all ViewModel-level tests used a fake repository that returned
+pre-computed progress values — bypassing the actual write path. Root-cause
+tests at the DAO / repository layer would have caught it immediately.
+
 ### Rename & Deployment Protocol
 
 When `applicationId`, `namespace`, or package structure changes,
@@ -465,4 +512,4 @@ document MUST be corrected.
 - Code reviews MUST verify Additive Logic, Data Integrity,
   and Consistency gates before approval.
 
-**Version**: 1.3.1 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-22
+**Version**: 1.3.2 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-22

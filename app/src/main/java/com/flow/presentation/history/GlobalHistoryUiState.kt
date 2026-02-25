@@ -1,5 +1,7 @@
 package com.flow.presentation.history
 
+import com.flow.data.local.TaskEntity
+
 /**
  * T011 — Controls how items are rendered in the Global History list.
  */
@@ -45,5 +47,11 @@ data class GlobalHistoryUiState(
     /** T034: Log entry currently open in the edit dialog; null = no dialog. */
     val editingLog: com.flow.data.local.TaskCompletionLog? = null,
     /** T034: Non-null when a validation error occurred during log edit. */
-    val editError: String? = null
+    val editError: String? = null,
+    /** T019/FR-005: Task entity open in the TaskEditSheet; null = sheet closed. */
+    val editingTask: TaskEntity? = null,
+    /** T019/FR-005: True when the action-choice bottom sheet is shown (recurring long-press). */
+    val showActionSheet: Boolean = false,
+    /** T019/FR-005: The HistoryItem whose long-press opened the action sheet. */
+    val actionSheetTarget: HistoryItem? = null
 )
