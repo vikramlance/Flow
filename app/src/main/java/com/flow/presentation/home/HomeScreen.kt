@@ -8,6 +8,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import com.flow.data.local.TaskStatus
+import com.flow.util.utcDateToLocalMidnight
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -103,7 +105,7 @@ fun HomeScreen(
         containerColor = SurfaceDark
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            // Dashboard Header — T021: today-focused progress
+            // Dashboard Header â€” T021: today-focused progress
             if (!todayProgressState.hasAnyTodayTasks) {
                 // Empty state: no tasks due today
                 Card(
@@ -178,6 +180,32 @@ fun HomeScreen(
                         onEdit = { editingTask = item.task },
                         onShowStreak = { onNavigateToTaskHistory(item.task.id) }
                     )
+                }
+                // ── T017: Upcoming section (FR-003) ─────────────────────────
+                if (uiState.upcomingTasks.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            text = "Upcoming",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.Gray,
+                            modifier = androidx.compose.ui.Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 12.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(uiState.upcomingTasks, key = { "upcoming_${it.task.id}" }) { item ->
+                        val streakCount by viewModel.getRawTaskStreak(item.task.id).collectAsState(initial = 0)
+                        TaskItem(
+                            task = item.task,
+                            urgency = item.urgency,
+                            streakCount = streakCount,
+                            onStatusChange = { newStatus ->
+                                viewModel.updateTaskStatus(item.task, newStatus)
+                            },
+                            onEdit = { editingTask = item.task },
+                            onShowStreak = { onNavigateToTaskHistory(item.task.id) }
+                        )
+                    }
                 }
             }
         }
@@ -294,7 +322,7 @@ fun OnboardingDialog(onDismiss: () -> Unit) {
 
 
 /**
- * T021 — Help overlay shown when the user taps the ℹ Info icon in the TopAppBar.
+ * T021 â€” Help overlay shown when the user taps the â„¹ Info icon in the TopAppBar.
  * Displays a concise reminder of key app interactions. Dismissible by tapping outside or the button.
  */
 @Composable
@@ -310,20 +338,20 @@ fun HelpOverlay(onDismiss: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ℹ️ How to use Flow",
+                    text = "â„¹ï¸ How to use Flow",
                     style = MaterialTheme.typography.headlineSmall,
                     color = NeonGreen
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val tips = listOf(
-                    "👆 Tap a task card to advance its status: TODO → In Progress ⏳ → Done ✅",
-                    "✏️ Long-press any card to edit or delete it.",
-                    "🌱 Recurring tasks track your daily completion streak.",
-                    "⏱️ Use the Focus Timer to stay in the zone.",
-                    "📊 Tap Analytics to view your heatmap and stats.",
-                    "📋 Tap History to see all completed tasks.",
-                    "🎯 The dashboard colour: Green ≥100% · Yellow ≥50% · Orange <50%."
+                    "ðŸ‘† Tap a task card to advance its status: TODO â†’ In Progress â³ â†’ Done âœ…",
+                    "âœï¸ Long-press any card to edit or delete it.",
+                    "ðŸŒ± Recurring tasks track your daily completion streak.",
+                    "â±ï¸ Use the Focus Timer to stay in the zone.",
+                    "ðŸ“Š Tap Analytics to view your heatmap and stats.",
+                    "ðŸ“‹ Tap History to see all completed tasks.",
+                    "ðŸŽ¯ The dashboard colour: Green â‰¥100% Â· Yellow â‰¥50% Â· Orange <50%."
                 )
 
                 tips.forEach { tip ->
@@ -405,7 +433,7 @@ fun TaskItem(
             .height(140.dp)
             .combinedClickable(
                 onClick = {
-                    // Cycle: TODO → IN_PROGRESS → COMPLETED → TODO
+                    // Cycle: TODO â†’ IN_PROGRESS â†’ COMPLETED â†’ TODO
                     val nextStatus = when (status) {
                         com.flow.data.local.TaskStatus.TODO -> com.flow.data.local.TaskStatus.IN_PROGRESS
                         com.flow.data.local.TaskStatus.IN_PROGRESS -> com.flow.data.local.TaskStatus.COMPLETED
@@ -430,7 +458,7 @@ fun TaskItem(
                  // Status Icon
                  when (status) {
                      com.flow.data.local.TaskStatus.COMPLETED -> Icon(Icons.Default.Check, contentDescription = null, tint = contentColor)
-                     com.flow.data.local.TaskStatus.IN_PROGRESS -> Text("⏳", style = MaterialTheme.typography.bodyLarge)
+                     com.flow.data.local.TaskStatus.IN_PROGRESS -> Text("â³", style = MaterialTheme.typography.bodyLarge)
                      else -> Box(modifier = Modifier.size(24.dp))
                  }
                  
@@ -439,7 +467,7 @@ fun TaskItem(
                           verticalAlignment = Alignment.CenterVertically,
                           modifier = Modifier.clickable { onShowStreak() }
                       ) {
-                          Text("🌱", style = MaterialTheme.typography.bodyLarge)
+                          Text("ðŸŒ±", style = MaterialTheme.typography.bodyLarge)
                           if (streakCount > 0) {
                               Spacer(modifier = Modifier.width(4.dp))
                               Text(
@@ -622,7 +650,7 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        startDate = it 
+                        startDate = utcDateToLocalMidnight(it)
                         showStartDatePicker = false
                         showStartTimePicker = true
                     }
@@ -669,7 +697,7 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        dueDate = it 
+                        dueDate = utcDateToLocalMidnight(it)
                         showTargetDatePicker = false
                         showTargetTimePicker = true
                     }
@@ -869,7 +897,7 @@ fun EditTaskDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        startDate = it 
+                        startDate = utcDateToLocalMidnight(it)
                         showStartDatePicker = false
                         showStartTimePicker = true
                     }
@@ -916,7 +944,7 @@ fun EditTaskDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        dueDate = it 
+                        dueDate = utcDateToLocalMidnight(it)
                         showTargetDatePicker = false
                         showTargetTimePicker = true
                     }
@@ -1085,7 +1113,7 @@ fun FocusTimerDialog(onDismiss: () -> Unit) {
                                 color = NeonGreen
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Take a break! 🔋", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+                            Text("Take a break! ðŸ”‹", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
                         } else {
                             Text(
                                 text = String.format("%02d:%02d", minutes, seconds),
@@ -1169,7 +1197,7 @@ fun TaskStreakDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🌱", style = MaterialTheme.typography.displaySmall)
+                    Text("ðŸŒ±", style = MaterialTheme.typography.displaySmall)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "$streak Days",

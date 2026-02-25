@@ -124,7 +124,7 @@ class TaskRepositoryImpl @Inject constructor(
             TaskEntity(
                 title        = title,
                 startDate    = normaliseToMidnight(startDate),
-                dueDate      = dueDate,
+                dueDate      = dueDate?.let { normaliseToMidnight(it) },
                 isRecurring  = isRecurring,
                 scheduleMask = if (isRecurring) validMask else null
             )
@@ -133,7 +133,12 @@ class TaskRepositoryImpl @Inject constructor(
 
     override suspend fun updateTask(task: TaskEntity) {
         val existing = taskDao.getTaskById(task.id) ?: return
-        taskDao.updateTask(task.copy(completionTimestamp = existing.completionTimestamp))
+        taskDao.updateTask(
+            task.copy(
+                completionTimestamp = existing.completionTimestamp,
+                dueDate             = task.dueDate?.let { normaliseToMidnight(it) }
+            )
+        )
     }
 
     override suspend fun updateTaskStatus(task: TaskEntity, newStatus: TaskStatus) {

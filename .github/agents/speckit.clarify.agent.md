@@ -85,52 +85,62 @@ Execution steps:
    - Clarification would not materially change implementation or validation strategy
    - Information is better deferred to planning phase (note internally)
 
-3. Generate (internally) a prioritized queue of candidate clarification questions (maximum 5). Do NOT output them all at once. Apply these constraints:
-    - Maximum of 10 total questions across the whole session.
+3. Generate a prioritized list of up to 5 candidate clarification questions. Apply these
+   constraints:
+    - Maximum of 5 total questions per session.
     - Each question must be answerable with EITHER:
        - A short multiple‑choice selection (2–5 distinct, mutually exclusive options), OR
        - A one-word / short‑phrase answer (explicitly constrain: "Answer in <=5 words").
-    - Only include questions whose answers materially impact architecture, data modeling, task decomposition, test design, UX behavior, operational readiness, or compliance validation.
-    - Ensure category coverage balance: attempt to cover the highest impact unresolved categories first; avoid asking two low-impact questions when a single high-impact area (e.g., security posture) is unresolved.
-    - Exclude questions already answered, trivial stylistic preferences, or plan-level execution details (unless blocking correctness).
+    - Only include questions whose answers materially impact architecture, data modeling, task
+      decomposition, test design, UX behavior, operational readiness, or compliance validation.
+    - Ensure category coverage balance: cover the highest-impact unresolved categories first;
+      avoid asking two low-impact questions when a single high-impact area is unresolved.
+    - Exclude questions already answered, trivial stylistic preferences, or plan-level execution
+      details (unless blocking correctness).
     - Favor clarifications that reduce downstream rework risk or prevent misaligned acceptance tests.
-    - If more than 5 categories remain unresolved, select the top 5 by (Impact * Uncertainty) heuristic.
+    - If more than 5 categories remain unresolved, select the top 5 by (Impact × Uncertainty).
+    - **Compose ALL questions into a single message ready to send in step 4. Do NOT hold any
+      question back for a later turn.**
 
-4. Sequential questioning loop (interactive):
-    - Present EXACTLY ONE question at a time.
-    - For multiple‑choice questions:
-       - **Analyze all options** and determine the **most suitable option** based on:
-          - Best practices for the project type
-          - Common patterns in similar implementations
-          - Risk reduction (security, performance, maintainability)
-          - Alignment with any explicit project goals or constraints visible in the spec
-       - Present your **recommended option prominently** at the top with clear reasoning (1-2 sentences explaining why this is the best choice).
-       - Format as: `**Recommended:** Option [X] - <reasoning>`
-       - Then render all options as a Markdown table:
+4. Batch questioning — present ALL questions in ONE message:
+    - Output all queued questions (Q1 through Qn, up to 5) in a **single message**. Never ask
+      one question and wait before revealing the others.
+    - Label each question with its number header: `### Q1 — <short topic>`, `### Q2 — <short topic>`, etc.
+    - For each multiple‑choice question:
+       - **Analyze all options** and determine the most suitable option based on best practices,
+         common patterns, risk reduction, and alignment with project goals visible in the spec.
+       - State your recommendation first:
+         `**Recommended:** Option [X] — <one or two sentence rationale>`
+       - Then render options as a Markdown table:
 
-       | Option | Description |
-       |--------|-------------|
-       | A | <Option A description> |
-       | B | <Option B description> |
-       | C | <Option C description> (add D/E as needed up to 5) |
-       | Short | Provide a different short answer (<=5 words) (Include only if free-form alternative is appropriate) |
+         | Option | Description |
+         |--------|-------------|
+         | A | <Option A description> |
+         | B | <Option B description> |
+         | C | <Option C description> (add D/E as needed up to 5) |
+         | Short | Provide a different short answer (≤5 words) *(only if free-form is appropriate)* |
 
-       - After the table, add: `You can reply with the option letter (e.g., "A"), accept the recommendation by saying "yes" or "recommended", or provide your own short answer.`
-    - For short‑answer style (no meaningful discrete options):
-       - Provide your **suggested answer** based on best practices and context.
-       - Format as: `**Suggested:** <your proposed answer> - <brief reasoning>`
-       - Then output: `Format: Short answer (<=5 words). You can accept the suggestion by saying "yes" or "suggested", or provide your own answer.`
-    - After the user answers:
-       - If the user replies with "yes", "recommended", or "suggested", use your previously stated recommendation/suggestion as the answer.
-       - Otherwise, validate the answer maps to one option or fits the <=5 word constraint.
-       - If ambiguous, ask for a quick disambiguation (count still belongs to same question; do not advance).
-       - Once satisfactory, record it in working memory (do not yet write to disk) and move to the next queued question.
-    - Stop asking further questions when:
-       - All critical ambiguities resolved early (remaining queued items become unnecessary), OR
-       - User signals completion ("done", "good", "no more"), OR
-       - You reach 5 asked questions.
-    - Never reveal future queued questions in advance.
-    - If no valid questions exist at start, immediately report no critical ambiguities.
+    - For short‑answer questions (no meaningful discrete options):
+       - State your suggestion: `**Suggested:** <proposed answer> — <brief rationale>`
+       - Add: `Format: short answer (≤5 words).`
+    - After all questions, close the message with:
+      > You can answer all questions at once by listing them, e.g. "Q1: A, Q2: yes, Q3: C".
+      > Reply "yes" or "recommended" for a question to accept the suggested option.
+      > Reply "done" or "skip" to end the session early.
+    - After the user replies:
+       - Parse each `Qn: <answer>` token.
+       - For "yes" / "recommended" / "suggested" → use the stated recommendation for that question.
+       - Validate each answer maps to a listed option or fits the ≤5-word constraint.
+       - If ONE answer is ambiguous, ask a single targeted disambiguation follow-up for that
+         question only (counts as a retry on the same question, not a new question).
+       - Once all answers are satisfactory, record them all in working memory and proceed to
+         step 5 to integrate them.
+    - Stop the session when:
+       - All questions have been answered, OR
+       - The user signals completion ("done", "good", "skip", "no more"), OR
+       - The session has consumed all 5 questions.
+    - If no valid questions exist at the start, immediately report no critical ambiguities and
+      suggest proceeding to `/speckit.plan`.
 
 5. Integration after EACH accepted answer (incremental update approach):
     - Maintain in-memory representation of the spec (loaded once at start) plus the raw file contents.

@@ -101,10 +101,12 @@ class TaskDaoTest {
     }
 
     @Test
-    fun getHomeScreenTasks_taskDueTomorrow_notIncluded() = runTest {
+    fun getHomeScreenTasks_taskDueTomorrow_isIncluded() = runTest {
+        // FR-003: upcoming tasks (dueDate >= tomorrowStart) should appear on home screen
         insert(TaskEntity(title = "Due Tomorrow", dueDate = tomorrowStart + 1000L))
         val result = dao.getHomeScreenTasks(todayStart, tomorrowStart).first()
-        assertTrue(result.isEmpty())
+        assertEquals(1, result.size)
+        assertEquals("Due Tomorrow", result[0].title)
     }
 
     // ── getHomeScreenTasks — Rule 3: overdue dated tasks (not completed) ──────
@@ -206,5 +208,53 @@ class TaskDaoTest {
         val result = dao.getCompletedNonRecurringTasks().first()
         assertEquals("Newer", result[0].title)
         assertEquals("Older", result[1].title)
+    }
+
+    // ── T007: FR-003 — future-dated task in getHomeScreenTasks ───────────────
+
+    /**
+     * T007 regression — getHomeScreenTasks returns future-dated incomplete task.
+     *
+     * Before fix: SQL had no clause for dueDate >= tomorrowStart, so tasks due
+     * the day after tomorrow were invisible on the Home screen.
+     *
+     * After fix: the new OR clause picks them up.
+     */
+    @Test
+    fun getHomeScreenTasks_returnsFutureDatedIncompleteTask() = runTest {
+        // Task due the day after tomorrow — should appear in the home list
+        insert(TaskEntity(title = "Future Task", dueDate = tomorrowStart + 86_400_000L, status = TaskStatus.TODO))
+        val result = dao.getHomeScreenTasks(todayStart, tomorrowStart).first()
+        assertEquals(1, result.size)
+        assertEquals("Future Task", result[0].title)
+    }
+
+    @Test
+    fun getHomeScreenTasks_completedFutureTask_notIncluded() = runTest {
+        insert(
+            TaskEntity(
+                title = "Completed Future",
+                dueDate = tomorrowStart + 86_400_000L,
+                status = TaskStatus.COMPLETED,
+                completionTimestamp = todayStart + 1000L
+            )
+        )
+        val result = dao.getHomeScreenTasks(todayStart, tomorrowStart).first()
+        assertTrue(result.isEmpty())
+    }
+
+    // ── T018: FR-004 — future task excluded from todayProgress ───────────────
+
+    /**
+     * T018 regression — future-dated task not counted in today's progress.
+     *
+     * getTasksDueOn() uses exact == todayMidnight comparison; a task with
+     * dueDate = tomorrowMidnight must NOT appear in the today count.
+     */
+    @Test
+    fun future_task_not_counted_in_todayProgress() = runTest {
+        insert(TaskEntity(title = "Due Tomorrow", dueDate = tomorrowStart))
+        val result = dao.getTasksDueOn(todayStart).first()
+        assertTrue("Future task must not be counted in today's progress", result.isEmpty())
     }
 }

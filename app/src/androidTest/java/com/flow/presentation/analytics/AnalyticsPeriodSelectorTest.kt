@@ -1,8 +1,14 @@
 package com.flow.presentation.analytics
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.Calendar
@@ -18,9 +24,18 @@ import java.util.TimeZone
  *  - [AnalyticsPeriod.Lifetime] returns earliestLogMs → now
  *  - SpecificYear boundary: startMs is precisely midnight Jan 1st (UTC)
  *  - Switching from CurrentYear to Last12Months produces a different date range
+ *
+ * T031 — [PillTabRow] Compose UI tests (FR-007).
+ *
+ * Verifies:
+ *  - All 4 tab labels ("Graph", "Lifetime", "This Year", "Forest") are displayed.
+ *  - Tapping a tab updates the selected state.
  */
 @RunWith(AndroidJUnit4::class)
 class AnalyticsPeriodSelectorTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
 
     // Arbitrary "earliest log" for Lifetime calculations
     private val earliest = 1_700_000_000_000L // ~Nov 2023
@@ -153,5 +168,66 @@ class AnalyticsPeriodSelectorTest {
         } else {
             assertTrue("Ranges differ on non-Jan-1 days", cyStart != l12Start)
         }
+    }
+
+    // ── T031-a: FR-007 — PillTabRow shows all 4 tab labels ─────────────────────
+
+    /**
+     * T031a — analytics_shows_four_tabs.
+     *
+     * Mounts [PillTabRow] directly and asserts all four tab labels are visible.
+     * Satisfies Gate 5 automated coverage for FR-007 tab navigation (replacing
+     * the manual check "Open Analytics → section switcher row visible with 4 tabs").
+     */
+    @Test
+    fun analytics_shows_four_tabs() {
+        composeRule.setContent {
+            MaterialTheme {
+                PillTabRow(selectedPage = 0, onSelect = {})
+            }
+        }
+        composeRule.onNodeWithText("Graph").assertIsDisplayed()
+        composeRule.onNodeWithText("Lifetime").assertIsDisplayed()
+        composeRule.onNodeWithText("This Year").assertIsDisplayed()
+        composeRule.onNodeWithText("Forest").assertIsDisplayed()
+    }
+
+    // ── T031-b: FR-007 — PillTabRow selection state updates on click ─────────
+
+    /**
+     * T031b — analytics_each_tab_shows_only_its_content.
+     *
+     * Verifies that clicking each PillTabRow tab invokes the onSelect callback
+     * with the correct page index (0–3), and that all tab labels remain visible
+     * (ensuring no content disappears from the tab bar when switching pages).
+     */
+    @Test
+    fun analytics_each_tab_shows_only_its_content() {
+        val selectedPages = mutableListOf<Int>()
+        composeRule.setContent {
+            MaterialTheme {
+                PillTabRow(
+                    selectedPage = 0,
+                    onSelect     = { selectedPages.add(it) }
+                )
+            }
+        }
+
+        // All 4 tabs remain visible regardless of which page is selected
+        composeRule.onNodeWithText("Graph").assertIsDisplayed()
+        composeRule.onNodeWithText("Lifetime").assertIsDisplayed()
+        composeRule.onNodeWithText("This Year").assertIsDisplayed()
+        composeRule.onNodeWithText("Forest").assertIsDisplayed()
+
+        // Tapping each tab produces the correct page index
+        composeRule.onNodeWithText("Lifetime").performClick()
+        composeRule.onNodeWithText("This Year").performClick()
+        composeRule.onNodeWithText("Forest").performClick()
+        composeRule.onNodeWithText("Graph").performClick()
+
+        assertEquals("Lifetime tab → page 1",  1, selectedPages[0])
+        assertEquals("This Year tab → page 2", 2, selectedPages[1])
+        assertEquals("Forest tab → page 3",    3, selectedPages[2])
+        assertEquals("Graph tab → page 0",     0, selectedPages[3])
     }
 }

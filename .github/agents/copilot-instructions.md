@@ -7,6 +7,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-20
 - Room 2.6.1  SQLite via 3 tables: `tasks`, `task_logs`, `daily_progress`. DB version **5** (no migration needed for this feature) (001-task-history-help)
 - Kotlin 2.0 + Jetpack Compose BOM ~2024.09.02, Material3 1.3.0, Room 2.6, Hilt, KSP, Coroutines + Flow (002-progress-gamification)
 - Room/SQLite (local-first, DB version 6) (002-progress-gamification)
+- Kotlin 2.0 (K2 compiler) + Jetpack Compose + Material 3 (BOM 2024.09.02), Hilt 2.52, Navigation Compose 2.8.x (003-fix-tasks-analytics)
+- Room 2.6.1 — AppDatabase v7 (no schema migration needed for this feature) (003-fix-tasks-analytics)
 
 - Kotlin 2.0.20 (K2 compiler); JVM target Java 8 + Jetpack Compose BOM 2024.09.02, Material 3, Hilt 2.52, Room 2.6.1, DataStore 1.1.1, Lifecycle 2.8.6, Navigation Compose 2.8.x, Hilt Navigation Compose 1.2.0 (001-app-analysis)
 
@@ -26,9 +28,9 @@ tests/
 Kotlin 2.0.20 (K2 compiler); JVM target Java 8: Follow standard conventions
 
 ## Recent Changes
+- 003-fix-tasks-analytics: Added Kotlin 2.0 (K2 compiler) + Jetpack Compose + Material 3 (BOM 2024.09.02), Hilt 2.52, Navigation Compose 2.8.x
 - 002-progress-gamification: Added Kotlin 2.0 + Jetpack Compose BOM ~2024.09.02, Material3 1.3.0, Room 2.6, Hilt, KSP, Coroutines + Flow
 - 002-progress-gamification: Added Kotlin 2.0 + Jetpack Compose BOM ~2024.09.02, Material3 1.3.0, Room 2.6, Hilt, KSP, Coroutines + Flow
-- 001-task-history-help: Added Kotlin 2.0.20 + Jetpack Compose + Material 3, Hilt 2.52 (DI), Room 2.6.1 (SQLite), DataStore Preferences, Navigation Compose 2.8.x, Coroutines + StateFlow
 
 
 <!-- MANUAL ADDITIONS START -->

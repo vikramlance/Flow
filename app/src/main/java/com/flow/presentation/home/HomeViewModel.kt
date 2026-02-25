@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
 
 @HiltViewModel
@@ -32,8 +33,22 @@ class HomeViewModel @Inject constructor(
         _helpVisible
     ) { homeTasks, todayProgressState, isFirstLaunch, helpVisible ->
         val now = System.currentTimeMillis()
+        val todayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val tomorrowStart = todayStart + 86_400_000L
+
+        // Split: upcoming = future-dated and not yet completed; today = everything else
+        val (upcomingList, todayList) = homeTasks.partition { task ->
+            task.dueDate != null &&
+            task.dueDate >= tomorrowStart &&
+            task.status != TaskStatus.COMPLETED
+        }
+
         HomeUiState(
-            homeTasks          = homeTasks.map { HomeTaskItem(it, it.urgencyLevel(now)) },
+            homeTasks          = todayList.map { HomeTaskItem(it, it.urgencyLevel(now)) },
+            upcomingTasks      = upcomingList.map { HomeTaskItem(it, it.urgencyLevel(now)) },
             todayProgressState = todayProgressState,
             isFirstLaunch      = isFirstLaunch,
             isLoading          = false,
