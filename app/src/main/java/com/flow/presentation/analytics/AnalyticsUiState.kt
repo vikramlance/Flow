@@ -16,8 +16,10 @@ import com.flow.data.repository.LifetimeStats
 data class AnalyticsUiState(
     // ── T025: period & heatmap ────────────────────────────────────────────
     val selectedPeriod: AnalyticsPeriod     = AnalyticsPeriod.CurrentYear,
-    val heatMapData: Map<Long, Int>          = emptyMap(),
-    val lifetimeStats: LifetimeStats?        = null,
+    val heatMapData: Map<Long, Int>          = emptyMap(),    /** T048/US6: inclusive start of the heat map window in epoch-ms (Jan 1 of selected year) */
+    val heatMapStartMs: Long                 = 0L,
+    /** T048/US6: inclusive end of the heat map window in epoch-ms (capped at end-of-today) */
+    val heatMapEndMs: Long                   = 0L,    val lifetimeStats: LifetimeStats?        = null,
     val currentYearStats: CurrentYearStats?  = null,
     val availableYears: List<Int>            = emptyList(),
     val isLoading: Boolean                   = true,

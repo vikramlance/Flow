@@ -89,7 +89,8 @@ fun AnalyticsScreen(
                             }
                             item {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    StatChip("Total",   uiState.totalCompleted.toString(), NeonGreen,      Modifier.weight(1f))
+                                    // T026/US5: Total chip draws from heatMapData so it can never diverge from the graph
+                                    StatChip("Total",   uiState.heatMapData.values.sum().toString(), NeonGreen,      Modifier.weight(1f))
                                     StatChip("On Time", uiState.completedOnTime.toString(), TaskInProgress, Modifier.weight(1f))
                                     StatChip("Missed",  uiState.missedDeadlines.toString(), TaskOverdue,   Modifier.weight(1f))
                                 }
@@ -104,7 +105,12 @@ fun AnalyticsScreen(
                                 Text("Contribution Graph", style = MaterialTheme.typography.titleMedium, color = Color.White)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark), modifier = Modifier.fillMaxWidth()) {
-                                    ContributionHeatmap(uiState.heatMapData)
+                                    // T029/US6: pass period-aware date range so heatmap shows only current period
+                                    ContributionHeatmap(
+                                        heatMapData = uiState.heatMapData,
+                                        startMs     = uiState.heatMapStartMs,
+                                        endMs       = uiState.heatMapEndMs
+                                    )
                                 }
                             }
                             if (uiState.achievements.isNotEmpty()) {
@@ -301,13 +307,14 @@ fun AchievementsSection(achievements: List<com.flow.data.local.AchievementEntity
     }
 }
 
-private fun achievementEmoji(type: AchievementType): String = when (type) {
-    AchievementType.STREAK_10     -> ""
-    AchievementType.STREAK_30     -> ""
-    AchievementType.STREAK_100    -> ""
-    AchievementType.ON_TIME_10    -> ""
-    AchievementType.EARLY_FINISH  -> ""
-    AchievementType.YEAR_FINISHER -> ""
+// T007/US8: `internal` visibility allows Tier 1 unit tests to directly verify emoji output.
+internal fun achievementEmoji(type: AchievementType): String = when (type) {
+    AchievementType.STREAK_10     -> "\uD83C\uDF31" // 🌱
+    AchievementType.STREAK_30     -> "\uD83C\uDF33" // 🌳
+    AchievementType.STREAK_100    -> "\uD83C\uDFC6" // 🏆
+    AchievementType.ON_TIME_10    -> "\u23F1\uFE0F" // ⏱️
+    AchievementType.EARLY_FINISH  -> "\u26A1"       // ⚡
+    AchievementType.YEAR_FINISHER -> "\uD83C\uDFAF" // 🎯
 }
 
 private fun achievementName(type: AchievementType): String = when (type) {
@@ -415,13 +422,25 @@ private fun forestCellColor(count: Int): Color = when {
 }
 
 @Composable
-fun ContributionHeatmap(heatMapData: Map<Long, Int>) {
-    val currentDay = Calendar.getInstance().apply {
-        while (get(Calendar.DAY_OF_WEEK) != Calendar.SATURDAY) add(Calendar.DAY_OF_YEAR, 1)
-        set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59)
+fun ContributionHeatmap(
+    heatMapData: Map<Long, Int>,
+    // T028/US6: explicit date range replaces hardcoded 52-week rolling window
+    startMs: Long = System.currentTimeMillis().let { now ->
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = now; set(Calendar.MONTH, Calendar.JANUARY)
+            set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }; cal.timeInMillis
+    },
+    endMs: Long = System.currentTimeMillis()
+) {
+    val weeksToShow = (((endMs - startMs) / (7L * 24 * 60 * 60 * 1000)).toInt() + 1).coerceAtLeast(1)
+    val startDay = Calendar.getInstance().apply {
+        timeInMillis = startMs
+        // Anchor to the Saturday at or before startMs so weeks always start on Sunday
+        while (get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) add(Calendar.DAY_OF_YEAR, -1)
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
     }
-    val weeksToShow = 52
-    val startDay = (currentDay.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -(weeksToShow * 7 - 1)) }
     val scrollState = rememberScrollState(initial = Int.MAX_VALUE)
     val cellSize = 12.dp; val cellGap = 4.dp; val rowHeight = cellSize + cellGap
     Row(modifier = Modifier.padding(8.dp)) {

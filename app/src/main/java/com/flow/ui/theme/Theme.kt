@@ -43,7 +43,8 @@ private val LightColorScheme = lightColorScheme(
 fun FlowTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    // T037/US9: disable dynamic color so DarkBackground (#121212) is never overridden on API 31+
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

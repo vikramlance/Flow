@@ -10,6 +10,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import com.flow.R
 import com.flow.ui.theme.NeonGreen
 import com.flow.ui.theme.SurfaceDark
 
@@ -28,6 +31,21 @@ fun TimerPanel(
     LaunchedEffect(uiState.isRunning) {
         if (uiState.isRunning) {
             TimerForegroundService.start(context, uiState.remainingSeconds)
+        }
+    }
+
+    // T035/US7: Play completion chime on notification audio stream when timer reaches zero
+    LaunchedEffect(uiState.isFinished) {
+        if (uiState.isFinished) {
+            val mp = MediaPlayer.create(context, R.raw.timer_complete)
+            mp?.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            mp?.setOnCompletionListener { it.release() }
+            mp?.start()
         }
     }
 

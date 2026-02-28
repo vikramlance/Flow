@@ -7,6 +7,7 @@ import com.flow.data.local.AppDatabase
 import com.flow.data.local.TaskCompletionLog
 import com.flow.data.local.TaskEntity
 import com.flow.data.local.TaskStreakEntity
+import com.flow.data.local.TaskStatus
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import kotlinx.coroutines.test.runTest
@@ -185,4 +186,132 @@ class RepositoryIntegrityTest {
         val progress = repo.getTodayProgress().first()
         assertEquals("totalToday should be 1 after adding a dueDate=today task", 1, progress.totalToday)
     }
+
+    // ── T017/US3: Progress counts mix of recurring and non-recurring tasks ────
+
+    /**
+     * T017 — Integration: 2 recurring + 2 non-recurring tasks all due today;
+     * complete 2; assert progress = 2/4.
+     */
+    @Test
+    fun progress_countsMixOfRecurringAndNonRecurringEndingToday() = runTest {
+        val repo = buildRepo()
+        val todayMidnight = today()
+        val todayEnd = todayMidnight + 86_340_000L // 11:59 PM
+
+        // Insert 2 recurring tasks due tonight
+        repo.addTask("Recurring 1", todayMidnight, dueDate = todayEnd, isRecurring = true,  scheduleMask = null)
+        repo.addTask("Recurring 2", todayMidnight, dueDate = todayEnd, isRecurring = true,  scheduleMask = null)
+        // Insert 2 non-recurring tasks due tonight
+        repo.addTask("OneTime 1",   todayMidnight, dueDate = todayEnd, isRecurring = false, scheduleMask = null)
+        repo.addTask("OneTime 2",   todayMidnight, dueDate = todayEnd, isRecurring = false, scheduleMask = null)
+
+        // Complete first 2 tasks
+        val allTasks = db.taskDao().getAllTasks().first()
+        repo.updateTaskStatus(allTasks[0], TaskStatus.COMPLETED)
+        repo.updateTaskStatus(allTasks[1], TaskStatus.COMPLETED)
+
+        val progress = repo.getTodayProgress().first()
+        assertEquals("totalToday must be 4 (2 recurring + 2 non-recurring)", 4, progress.totalToday)
+        assertEquals("completedToday must be 2", 2, progress.completedToday)
+    }
+
+    // ── T021/US4: Non-recurring task moved to IN_PROGRESS disappears from history
+
+    @Test
+    fun nonRecurringTask_movedToInProgress_disappearsFromHistory() = runTest {
+        val repo = buildRepo()
+        val todayMidnight = today()
+
+        repo.addTask("History Task", todayMidnight, null, isRecurring = false, scheduleMask = null)
+        val task = db.taskDao().getAllTasks().first().first()
+
+        // Complete the task → it appears in history
+        repo.updateTaskStatus(task, TaskStatus.COMPLETED)
+        val completed = db.taskDao().getCompletedNonRecurringTasks().first()
+        assertEquals("Task must appear in history after completion", 1, completed.size)
+
+        // Move back to IN_PROGRESS → completionTimestamp cleared → disappears from history
+        repo.updateTaskStatus(completed.first(), TaskStatus.IN_PROGRESS)
+        val afterUndo = db.taskDao().getCompletedNonRecurringTasks().first()
+        assertTrue(
+            "Non-recurring task moved to IN_PROGRESS must disappear from history",
+            afterUndo.isEmpty()
+        )
+    }
+
+    // ── T022/US4: Recurring task re-completed same day has only one log entry ─
+
+    @Test
+    fun recurringTask_recompletedSameDay_onlyOneLogEntry() = runTest {
+        val repo = buildRepo()
+        val todayMidnight = today()
+        insertTask(99L)
+        val task = db.taskDao().getTaskById(99L)!!.copy(isRecurring = true)
+        db.taskDao().updateTask(task)
+
+        // Complete once
+        repo.updateTaskStatus(task, TaskStatus.COMPLETED)
+        // Complete again (simulate double-tap or undo and redo)
+        val t1 = db.taskDao().getTaskById(99L)!!
+        repo.updateTaskStatus(t1.copy(status = TaskStatus.IN_PROGRESS), TaskStatus.COMPLETED)
+
+        val logs = db.taskCompletionLogDao().getCompletedLogsForTask(99L)
+        assertEquals(
+            "Re-completing a recurring task on the same day must produce exactly 1 log entry (UPSERT)",
+            1,
+            logs.size
+        )
+    }
+
+    // ── T046/US3: Existing midnight-timed task is not altered by updateTask ───
+
+    @Test
+    fun existingMidnightTask_afterRepositoryChange_fieldValuesUnchanged() = runTest {
+        val repo = buildRepo()
+        val todayMidnight = today()
+
+        // Insert legacy task with exact midnight dueDate (pre-fix format)
+        val legacyTask = TaskEntity(
+            id        = 0L,
+            title     = "Legacy Midnight Task",
+            startDate = todayMidnight,
+            dueDate   = todayMidnight,
+            isRecurring = false
+        )
+        val assignedId = db.taskDao().insertTask(legacyTask)
+        val inserted = db.taskDao().getTaskById(assignedId)!!
+
+        // Perform a read→write cycle via updateTask (no status change)
+        repo.updateTask(inserted)
+
+        val afterUpdate = db.taskDao().getTaskById(assignedId)!!
+        assertEquals(
+            "Legacy midnight startDate must not be altered by updateTask",
+            todayMidnight,
+            afterUpdate.startDate
+        )
+        assertEquals(
+            "Legacy midnight dueDate must not be altered by updateTask",
+            todayMidnight,
+            afterUpdate.dueDate
+        )
+    }
+
+    // ── Helpers used by new tests ─────────────────────────────────────────────
+
+    private fun today(): Long = Calendar.getInstance().run {
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        timeInMillis
+    }
+
+    private fun buildRepo() = TaskRepositoryImpl(
+        db                   = db,
+        taskDao              = db.taskDao(),
+        dailyProgressDao     = db.dailyProgressDao(),
+        taskCompletionLogDao = db.taskCompletionLogDao(),
+        taskStreakDao        = db.taskStreakDao(),
+        achievementDao       = db.achievementDao()
+    )
 }
