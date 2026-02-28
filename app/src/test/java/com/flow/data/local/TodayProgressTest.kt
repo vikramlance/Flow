@@ -112,16 +112,18 @@ class TodayProgressTest {
     // ── TR-001 / FR-001 regression: dueDate normalisation ────────────────────
 
     /**
-     * T006 regression — dueDate stored at 10 pm is normalised to midnight and counted.
+     * T006 regression — dueDate stored at 10 pm normalises to midnight.
      *
      * Before fix: TaskRepositoryImpl.addTask() stored `dueDate = dueDate` (raw),
      * so tasks created with `dueDate = todayMidnight + 79_200_000` (10 pm) were
      * stored at 10 pm and never matched `getTasksDueOn(todayMidnight)`, causing
      * the progress bar to always show 0%.
      *
-     * After fix: addTask() normalises dueDate via normaliseToMidnight(), so
-     * `todayMidnight + 79_200_000` → `todayMidnight` in the DB.
-     * This test verifies the normalisation contract using the same Calendar logic.
+     * Current state (T018/T019/US3): addTask() no longer normalises dueDate;
+     * getTodayProgress() uses getTasksDueInRange(today, todayEnd) where
+     * todayEnd = midnight + 86_399_999, so both midnight and 10 pm values are
+     * counted. This test verifies the normaliseToMidnight() function logic itself,
+     * not the DAO query semantics.
      */
     @Test
     fun `dueDate stored at 6pm is normalised to midnight and counted`() {
@@ -143,7 +145,8 @@ class TodayProgressTest {
         )
 
         // Verify that a TaskEntity with the normalised dueDate would be counted by
-        // getTodayProgress() which uses == todayMidnight comparison
+        // getTodayProgress() which uses getTasksDueInRange(today, todayEnd) range query.
+        // Both midnight-aligned and end-of-day (23:59 PM) values fall within the range.
         val task = TaskEntity(
             id        = 99L,
             title     = "Task With 10pm DueDate",
@@ -151,7 +154,7 @@ class TodayProgressTest {
             startDate = todayMidnight - 86_400_000L
         )
         assertEquals(
-            "TaskEntity with normalised dueDate should be countable by exact-midnight query",
+            "TaskEntity with normalised dueDate should be countable by range query [dayStart, dayEnd]",
             todayMidnight, task.dueDate
         )
     }

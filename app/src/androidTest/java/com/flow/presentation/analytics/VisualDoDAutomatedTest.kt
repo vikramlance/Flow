@@ -167,45 +167,20 @@ class VisualDoDAutomatedTest {
     }
 
     // -----------------------------------------------------------------------
-    // DoD #8 — Achievement emojis render as non-empty text in AchievementsSection
+    // DoD #8 — Achievement emojis render as non-empty text on Achievements screen
     // -----------------------------------------------------------------------
 
     /**
-     * Seeds one achievement into the DB and navigates to the Analytics screen.
-     * Verifies the AchievementsSection header "Achievements" exists in the
-     * Compose tree — it only appears when achievements.isNotEmpty() (Fix 9).
+     * T016a: AchievementsSection removed from AnalyticsScreen. Achievements are now
+     * displayed on a dedicated AchievementsScreen (T013).
      *
-     * The node is inside a LazyColumn (off-screen scroll), so assertExists() is
-     * used rather than assertIsDisplayed() which requires on-screen visibility.
-     *
-     * Companion to AnalyticsHelpersTest which validates achievementEmoji() returns
-     * non-empty strings at the unit level. This test validates the full rendering
-     * path into Compose (AnalyticsScreen → AchievementsSection).
+     * This test is replaced by AchievementsScreenTest (T010) which verifies badge
+     * rendering on the new screen. Re-enabled in T013 after AchievementsScreen exists.
      */
     @Test
+    @Ignore("T016a: AchievementsSection removed from AnalyticsScreen. See AchievementsScreenTest (T010/T013) for coverage on new screen.")
     fun analyticsScreen_achievementEmojis_renderAsNonEmptyText() {
-        runBlocking {
-            db.achievementDao().insertOnConflictIgnore(
-                AchievementEntity(
-                    type     = AchievementType.STREAK_10,
-                    earnedAt = System.currentTimeMillis()
-                )
-            )
-        }
-
-        composeRule.onNodeWithText("Flow").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Stats").performClick()
-        composeRule.waitForIdle()
-
-        composeRule.onNodeWithText("Analytics").assertIsDisplayed()
-
-        // "Achievements" header is inside a LazyColumn — may be below the fold.
-        // performScrollTo() asks the nearest scrollable ancestor to reveal the node,
-        // then assertIsDisplayed() confirms it is on screen.
-        // achievementEmoji() correctness is verified by AchievementsSectionRenderTest + AnalyticsHelpersTest.
-        composeRule.onNodeWithText("Achievements", substring = true, useUnmergedTree = true)
-            .performScrollTo()
-            .assertIsDisplayed()
+        // Superseded by AchievementsScreenTest
     }
 
     // -----------------------------------------------------------------------
@@ -274,10 +249,11 @@ class VisualDoDAutomatedTest {
 }
 
 /**
- * Isolated Compose test for [AchievementsSection] composable.
+ * T016a: AchievementsSection moved from AnalyticsScreen to AchievementsScreen (T013).
  *
- * Does **not** require Hilt or a real DB — exercises the composable directly
- * with test data to verify emoji rendering (DoD #8 / Principle VII guard).
+ * This class will be re-enabled and updated in T013 to test AchievementCard
+ * composables in the new AchievementsScreen. Until then all tests are @Ignored
+ * to keep the instrumented test build compilable.
  */
 @RunWith(AndroidJUnit4::class)
 class AchievementsSectionRenderTest {
@@ -286,44 +262,11 @@ class AchievementsSectionRenderTest {
     val composeRule = createComposeRule()
 
     /**
-     * Verifies that [AchievementsSection] renders an emoji Text node that is
-     * non-empty for every [AchievementType].
-     *
-     * This is the Compose-level guard complementing the unit-level
-     * AnalyticsHelpersTest. It rules out scenarios where achievementEmoji()
-     * returns a non-empty string but Compose somehow fails to render it.
+     * T013: will be re-enabled after AchievementsScreen.kt is created.
      */
     @Test
+    @Ignore("T016a/T013: AchievementsSection moved to AchievementsScreen. Re-enable in T013.")
     fun achievementsSection_allTypes_renderNonEmptyEmojiText() {
-        val achievements = AchievementType.entries.map { type ->
-            AchievementEntity(
-                id       = type.ordinal.toLong() + 1L,
-                type     = type,
-                earnedAt = System.currentTimeMillis()
-            )
-        }
-
-        composeRule.setContent {
-            MaterialTheme {
-                AchievementsSection(achievements = achievements)
-            }
-        }
-
-        // Section header must be visible
-        composeRule.onNodeWithText("Achievements", substring = true).assertIsDisplayed()
-
-        // Verify each achievement card by its name from achievementName():
-        //   STREAK_10  → "Budding Habit (10 days)"
-        //   STREAK_30  → "Growing Strong (30 days)"
-        //   STREAK_100 → "Iron Will (100 days)"
-        //   ON_TIME_10 → "Punctual (10 on-time)"
-        //   EARLY_FINISH → "Early Bird"
-        //   YEAR_FINISHER → "Year Finisher"
-        composeRule.onNodeWithText("Budding Habit",   substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Growing Strong",  substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Iron Will",       substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Punctual",        substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Early Bird",      substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Year Finisher",   substring = true).assertIsDisplayed()
+        // Superseded by AchievementsScreenTest after T013
     }
 }

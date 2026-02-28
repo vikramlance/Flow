@@ -680,6 +680,16 @@ rename.
 
 ## Repository Hygiene
 
+### Temporary Scripts
+
+Internal, one-time, or ad-hoc scripts (`.sh`, `.ps1`, etc.) created during
+development to fix bugs, refactor code, or perform mechanical changes MUST NOT
+be placed at the repository root.
+
+- All such scripts MUST be created in and run from `.specify/scripts/backup/`.
+- This ensures the root directory remains clean and scripts are kept organized
+  away from the core project files.
+
 ### Temporary, Output, and Log Files
 
 Build output files, test result captures, and any other

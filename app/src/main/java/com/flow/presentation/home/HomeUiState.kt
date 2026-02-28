@@ -51,7 +51,9 @@ data class HomeUiState(
     val isFirstLaunch: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,           // non-null triggers error banner
-    val showHelp: Boolean = false
+    val showHelp: Boolean = false,
+    /** T025/CO-001: true when the user has set scheduleMask=0 (no day selected). */
+    val scheduleMaskError: Boolean = false
 ) {
     /** Convenience accessor — keeps existing HomeScreen code backwards-compatible. */
     val todayProgress: Float get() = todayProgressState.ratio

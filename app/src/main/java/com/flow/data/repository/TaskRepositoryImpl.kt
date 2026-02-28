@@ -121,16 +121,11 @@ class TaskRepositoryImpl @Inject constructor(
             scheduleMask in 1..127 -> scheduleMask
             else -> null // silently clamp invalid values to “every day”
         }
-        val todayMidnight = normaliseToMidnight(System.currentTimeMillis())
-        // T012/US1: Recurring tasks always use 12:01 AM start and 11:59 PM end
-        // T015/US2: Non-recurring tasks with null dueDate default to 11:59 PM today
-        val resolvedStart = if (isRecurring) todayMidnight + 60_000L
-                            else normaliseToMidnight(startDate)
-        val resolvedDue   = when {
-            isRecurring          -> todayMidnight + 86_340_000L
-            dueDate != null      -> normaliseToMidnight(dueDate)
-            else                 -> todayMidnight + 86_340_000L
-        }
+        // T019/US3: Preserve caller-supplied times — AddTaskDialog supplies defaultEndTime()
+        // (T020) for dueDate and dialog-open time for startDate.
+        // refreshRecurringTasks() handles the 12:01 AM / 11:59 PM reset independently.
+        val resolvedStart = startDate
+        val resolvedDue   = dueDate
         taskDao.insertTask(
             TaskEntity(
                 title        = title,

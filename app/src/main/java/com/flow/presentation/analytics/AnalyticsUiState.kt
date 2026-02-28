@@ -1,6 +1,5 @@
 package com.flow.presentation.analytics
 
-import com.flow.data.local.AchievementEntity
 import com.flow.data.local.TaskStreakEntity
 import com.flow.data.repository.CurrentYearStats
 import com.flow.data.repository.LifetimeStats
@@ -34,7 +33,6 @@ data class AnalyticsUiState(
 
     // ── T030: gamification ────────────────────────────────────────────────
     val streaks: List<TaskStreakEntity>    = emptyList(),
-    val achievements: List<AchievementEntity> = emptyList(),
 
     // ── T037: forest concept ──────────────────────────────────────────────
     val forestData: Map<Long, List<String>> = emptyMap(),

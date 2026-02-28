@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.flow.data.local.AchievementType
 import com.flow.ui.theme.NeonGreen
 import com.flow.ui.theme.SurfaceDark
 import com.flow.ui.theme.TaskInProgress
@@ -112,9 +111,6 @@ fun AnalyticsScreen(
                                         endMs       = uiState.heatMapEndMs
                                     )
                                 }
-                            }
-                            if (uiState.achievements.isNotEmpty()) {
-                                item { AchievementsSection(uiState.achievements) }
                             }
                         }
 
@@ -282,48 +278,6 @@ fun StatChip(label: String, value: String, color: Color, modifier: Modifier = Mo
             Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
         }
     }
-}
-
-@Composable
-fun AchievementsSection(achievements: List<com.flow.data.local.AchievementEntity>) {
-    val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-    Text("Achievements ", style = MaterialTheme.typography.titleMedium, color = Color.White)
-    Spacer(modifier = Modifier.height(8.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        achievements.forEach { ach ->
-            Card(colors = CardDefaults.cardColors(containerColor = NeonGreen.copy(alpha = 0.12f)),
-                shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(achievementEmoji(ach.type), style = MaterialTheme.typography.headlineMedium)
-                    Column {
-                        Text(achievementName(ach.type), style = MaterialTheme.typography.titleSmall, color = NeonGreen, fontWeight = FontWeight.Bold)
-                        Text("Earned ${sdf.format(Date(ach.earnedAt))}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                        ach.periodLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// T007/US8: `internal` visibility allows Tier 1 unit tests to directly verify emoji output.
-internal fun achievementEmoji(type: AchievementType): String = when (type) {
-    AchievementType.STREAK_10     -> "\uD83C\uDF31" // 🌱
-    AchievementType.STREAK_30     -> "\uD83C\uDF33" // 🌳
-    AchievementType.STREAK_100    -> "\uD83C\uDFC6" // 🏆
-    AchievementType.ON_TIME_10    -> "\u23F1\uFE0F" // ⏱️
-    AchievementType.EARLY_FINISH  -> "\u26A1"       // ⚡
-    AchievementType.YEAR_FINISHER -> "\uD83C\uDFAF" // 🎯
-}
-
-private fun achievementName(type: AchievementType): String = when (type) {
-    AchievementType.STREAK_10     -> "Budding Habit (10 days)"
-    AchievementType.STREAK_30     -> "Growing Strong (30 days)"
-    AchievementType.STREAK_100    -> "Iron Will (100 days)"
-    AchievementType.ON_TIME_10    -> "Punctual (10 on-time)"
-    AchievementType.EARLY_FINISH  -> "Early Bird"
-    AchievementType.YEAR_FINISHER -> "Year Finisher"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

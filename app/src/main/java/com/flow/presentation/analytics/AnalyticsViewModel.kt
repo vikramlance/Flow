@@ -54,9 +54,8 @@ class AnalyticsViewModel @Inject constructor(
         _selectedPeriod,
         earliestLogMs,
         periodData,
-        repository.getAchievements(),
         repository.getCompletedTaskCount()
-    ) { period, earliest, (heatMap, forest, _), achievements, totalCompleted ->
+    ) { period, earliest, (heatMap, forest, _), totalCompleted ->
         val (startMs, endMs) = period.toDateRange(earliestLogMs = earliest)
 
         // Compute available years from earliest log year through now
@@ -98,8 +97,6 @@ class AnalyticsViewModel @Inject constructor(
             missedDeadlines  = missedDeadlines,
             currentStreak    = currentStreakVal,
             bestStreak       = bestStreak,
-            // T030
-            achievements     = achievements,
             // T037
             forestData       = forest,
             forestTreeCount  = forestTreeCount

@@ -11,6 +11,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-20
 - Room 2.6.1 — AppDatabase v7 (no schema migration needed for this feature) (003-fix-tasks-analytics)
 - Kotlin 2.0, JVM target 11 + Jetpack Compose (BOM aligned), Material 3, Hilt 2.x, Room 2.6, DataStore Preferences, Kotlin Coroutines + Flow (001-ui-bug-fixes)
 - Room / SQLite  schema version 7; `task_logs` has UNIQUE(taskId, date) (001-ui-bug-fixes)
+- Kotlin 2.0 (K2 compiler) + Jetpack Compose + Material 3 (BOM 2024.09.02), Hilt 2.52, Navigation Compose 2.8.x, Material Icons Extended (already in BOM classpath) (004-task-ui-scheduling)
+- Room 2.6.1 — AppDatabase (no version bump; `scheduleMask` already exists) (004-task-ui-scheduling)
 
 - Kotlin 2.0.20 (K2 compiler); JVM target Java 8 + Jetpack Compose BOM 2024.09.02, Material 3, Hilt 2.52, Room 2.6.1, DataStore 1.1.1, Lifecycle 2.8.6, Navigation Compose 2.8.x, Hilt Navigation Compose 1.2.0 (001-app-analysis)
 
@@ -30,9 +32,9 @@ tests/
 Kotlin 2.0.20 (K2 compiler); JVM target Java 8: Follow standard conventions
 
 ## Recent Changes
+- 004-task-ui-scheduling: Added Kotlin 2.0 (K2 compiler) + Jetpack Compose + Material 3 (BOM 2024.09.02), Hilt 2.52, Navigation Compose 2.8.x, Material Icons Extended (already in BOM classpath)
 - 001-ui-bug-fixes: Added Kotlin 2.0, JVM target 11 + Jetpack Compose (BOM aligned), Material 3, Hilt 2.x, Room 2.6, DataStore Preferences, Kotlin Coroutines + Flow
 - 003-fix-tasks-analytics: Added Kotlin 2.0 (K2 compiler) + Jetpack Compose + Material 3 (BOM 2024.09.02), Hilt 2.52, Navigation Compose 2.8.x
-- 002-progress-gamification: Added Kotlin 2.0 + Jetpack Compose BOM ~2024.09.02, Material3 1.3.0, Room 2.6, Hilt, KSP, Coroutines + Flow
 
 
 <!-- MANUAL ADDITIONS START -->
@@ -44,6 +46,10 @@ Kotlin 2.0.20 (K2 compiler); JVM target Java 8: Follow standard conventions
   temporary/ad-hoc text files produced during development MUST be
   written to `logs/` at the repo root. That directory is in
   `.gitignore` and is never committed.
+- **Never create internal script files (.sh, .ps1, etc.) at the repo root.** 
+  Temporary scripts used for automated changes, search/replace, or one-off runs
+  must always be stored in `.specify/scripts/backup` to keep the root directory
+  organized and clean.
 - Examples of what belongs in `logs/` (not at root): `build_output.txt`,
   `unit_test_out.txt`, `device_test*.txt`, `instrumented_out.txt`,
   `test_result.txt`, or any `*.txt` produced by redirecting a shell command.
