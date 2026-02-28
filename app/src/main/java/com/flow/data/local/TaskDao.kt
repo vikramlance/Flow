@@ -80,4 +80,12 @@ interface TaskDao {
      */
     @Query("SELECT * FROM tasks WHERE dueDate = :todayMidnight")
     fun getTasksDueOn(todayMidnight: Long): Flow<List<TaskEntity>>
+
+    /**
+     * T003/US3: Tasks whose dueDate falls within the inclusive range [start, end].
+     * Used by getTodayProgress() so both recurring (11:59 PM) and non-recurring tasks
+     * due today are counted. Replaces the exact-midnight match in getTodayProgress().
+     */
+    @Query("SELECT * FROM tasks WHERE dueDate BETWEEN :start AND :end")
+    fun getTasksDueInRange(start: Long, end: Long): Flow<List<TaskEntity>>
 }

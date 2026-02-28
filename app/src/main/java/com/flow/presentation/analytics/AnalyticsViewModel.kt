@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import java.time.LocalDate
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -76,9 +77,17 @@ class AnalyticsViewModel @Inject constructor(
 
         val forestTreeCount = forest.values.sumOf { it.size }
 
+        // T048/US6: cap heatmap display end at today so no empty future months are rendered
+        val todayEnd = LocalDate.now().atTime(23, 59, 59)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val heatMapEnd = minOf(endMs, todayEnd)
+
         AnalyticsUiState(
             selectedPeriod   = period,
             heatMapData      = heatMap,
+            // T048/US6: expose period date range so ContributionHeatmap shows correct window
+            heatMapStartMs   = startMs,
+            heatMapEndMs     = heatMapEnd,
             lifetimeStats    = lifetimeStats,
             currentYearStats = currentYearStats,
             availableYears   = availableYears,

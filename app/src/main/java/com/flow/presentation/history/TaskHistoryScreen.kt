@@ -33,6 +33,21 @@ fun TaskHistoryScreen(
     val history by viewModel.getTaskHistory(taskId).collectAsState(initial = emptyList())
     val streak by viewModel.getRawTaskStreak(taskId).collectAsState(initial = 0)
 
+    // T031/US11: Compute Jan 1 of current year → end of today for the streak heatmap
+    val nowMs           = System.currentTimeMillis()
+    val jan1OfYearMs    = Calendar.getInstance().apply {
+        timeInMillis = nowMs
+        set(Calendar.MONTH, Calendar.JANUARY)
+        set(Calendar.DAY_OF_MONTH, 1)
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val endOfTodayMs    = Calendar.getInstance().apply {
+        timeInMillis = nowMs
+        set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
+
     // Convert TaskCompletionLog to Map<date, count> for the Heatmap component
     val heatMapData: Map<Long, Int> = history
         .filter { it.isCompleted }
@@ -91,7 +106,12 @@ fun TaskHistoryScreen(
                 modifier = Modifier.fillMaxWidth().height(250.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    ContributionHeatmap(heatMapData)
+                    // T031/US11: date-range-aware heatmap (Jan 1 → today), T032/US11: darker streak green
+                    ContributionHeatmap(
+                        heatMapData = heatMapData,
+                        startMs     = jan1OfYearMs,
+                        endMs       = endOfTodayMs
+                    )
                 }
             }
             

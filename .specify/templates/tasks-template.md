@@ -10,6 +10,8 @@ description: "Task list template for feature implementation"
 
 **Tests**: Tests at all tiers (unit, instrumented/integration, system/on-device) are MANDATORY for every feature. Never substitute an automated test tier with a "manual testing" task. Use the [P] tag to mark test tasks as parallel-safe.
 
+**TDD Discipline (MANDATORY)**: Tests MUST be written FIRST and confirmed FAILING before implementation begins (red). Implementation then makes them pass (green). The full test suite MUST be run after EVERY task completion — not batched to the end of the feature sequence.
+
 **Constitution Gates**: Tasks MUST include:
 - At least one unit-test task per user story (Tier 1, `src/test/`).
 - At least one instrumented test task per user story for DAO/repository/UI integration (Tier 2, `src/androidTest/`).
@@ -20,6 +22,7 @@ description: "Task list template for feature implementation"
 - Any required data migration/validation tasks (if persistence is touched)
 - A consistency check task (layer boundaries + state modelling)
 - A security check task: confirm no credentials or PII in tracked files, `.gitignore` up to date, parameterized queries used, no sensitive production logging
+- A full-suite test run task at the end of each phase (Tier 1 always; Tier 2/3 whenever a device is available)
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -189,7 +192,8 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Tests MUST be written and confirmed **FAILING** before implementation (TDD red-green)
+- Run the full test suite after EVERY task completion — do not batch to end of feature
 - Non-regression verification MUST be updated as the story evolves
 - Models before services
 - Services before endpoints
@@ -257,7 +261,8 @@ With multiple developers:
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
-- Verify tests fail before implementing
+- Verify tests **fail** before implementing (TDD red: write test → confirm fail → implement → confirm pass)
+- Run full test suite after every task, not just at end of feature
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence

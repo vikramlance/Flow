@@ -10,7 +10,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,10 +31,16 @@ class TimerViewModel @Inject constructor(
     private var tickJob: Job? = null
 
     init {
+        // T034/US7: React to settings changes in real time (not just once at startup).
+        // Guard with !isRunning && !isPaused so a live timer is never reset mid-session.
         viewModelScope.launch {
-            val defaultMinutes = settingsRepository.defaultTimerMinutes.firstOrNull() ?: 25
-            val seconds = defaultMinutes * 60
-            _uiState.update { it.copy(durationSeconds = seconds, remainingSeconds = seconds) }
+            settingsRepository.defaultTimerMinutes.collect { newMinutes ->
+                val s = _uiState.value
+                if (!s.isRunning && !s.isPaused) {
+                    val seconds = newMinutes * 60
+                    _uiState.update { it.copy(durationSeconds = seconds, remainingSeconds = seconds) }
+                }
+            }
         }
     }
 

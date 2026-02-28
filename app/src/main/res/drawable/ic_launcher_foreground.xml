@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    T016: Adaptive icon foreground — wraps the Flow logo PNG as a bitmap drawable.
-    The system picks the correct density variant from mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/flow_logo.png.
-    gravity="center" ensures the logo is centred within the 108dp foreground area.
-    NOTE: Ideally each density PNG is properly scaled in Android Studio's Image Asset Studio.
+    T039/US10: Adaptive icon foreground with mandatory 21dp safe-zone padding on all sides.
+    The 108dp adaptive icon canvas has a 66dp safe zone (centred).
+    Required inset each side = (108dp - 66dp) / 2 = 21dp.
+    Using a layer-list with android:top/bottom/left/right="21dp" guarantees all
+    content in flow_logo remains fully within the 66dp safe zone on every launcher.
 -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@mipmap/flow_logo"
-    android:gravity="center" />
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:top="21dp"
+        android:bottom="21dp"
+        android:left="21dp"
+        android:right="21dp">
+        <bitmap
+            android:src="@mipmap/flow_logo"
+            android:gravity="center" />
+    </item>
+</layer-list>

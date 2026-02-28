@@ -257,4 +257,56 @@ class TaskDaoTest {
         val result = dao.getTasksDueOn(todayStart).first()
         assertTrue("Future task must not be counted in today's progress", result.isEmpty())
     }
+
+    // ── T005/US3: getTasksDueInRange — task at 11:59 PM is included ───────────
+
+    /**
+     * T005 regression — task with dueDate at today 23:59 must be in range.
+     *
+     * Before fix: getTodayProgress() used getTasksDueOn(midnight) which required
+     * exact midnight timestamp; a task at 11:59 PM was invisible.
+     *
+     * After fix: getTasksDueInRange(today 00:00, today 23:59:59) includes it.
+     */
+    @Test
+    fun getTasksDueInRange_returnsTaskWithDueDateAt1159pm() = runTest {
+        val today1159pm = todayStart + 86_340_000L // 23:59:00
+        insert(TaskEntity(title = "11:59 PM Task", dueDate = today1159pm))
+
+        val result = dao.getTasksDueInRange(todayStart, todayStart + 86_399_999L).first()
+        assertEquals(
+            "getTasksDueInRange must include task with dueDate = today 23:59",
+            1,
+            result.size
+        )
+        assertEquals("11:59 PM Task", result[0].title)
+    }
+
+    // ── T006/US3: getTasksDueInRange — task due tomorrow is excluded ──────────
+
+    @Test
+    fun getTasksDueInRange_excludesTaskDueTomorrow() = runTest {
+        insert(TaskEntity(title = "Tomorrow Task", dueDate = tomorrowStart))
+
+        val result = dao.getTasksDueInRange(todayStart, todayStart + 86_399_999L).first()
+        assertTrue(
+            "getTasksDueInRange must NOT include tomorrow's task",
+            result.isEmpty()
+        )
+    }
+
+    @Test
+    fun getTasksDueInRange_multipleTasksOnSameDay_allReturned() = runTest {
+        val t1 = todayStart + 60_000L        // 12:01 AM
+        val t2 = todayStart + 43_200_000L    // 12:00 PM
+        val t3 = todayStart + 86_340_000L    // 11:59 PM
+        insert(
+            TaskEntity(title = "Morning", dueDate = t1),
+            TaskEntity(title = "Noon",    dueDate = t2),
+            TaskEntity(title = "Night",   dueDate = t3)
+        )
+
+        val result = dao.getTasksDueInRange(todayStart, todayStart + 86_399_999L).first()
+        assertEquals("All 3 same-day tasks must be included in range query", 3, result.size)
+    }
 }

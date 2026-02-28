@@ -49,11 +49,12 @@ class TaskRepositoryImpl @Inject constructor(
     override fun getTaskHistory(taskId: Long): Flow<List<TaskCompletionLog>> =
         taskCompletionLogDao.getLogsForTask(taskId)
 
-    // ── FR-001: today progress counts only dueDate=todayMidnight tasks ──
+    // ── FR-001: today progress counts tasks due anywhere within today ──────
 
     override fun getTodayProgress(): Flow<TodayProgressState> {
-        val today = normaliseToMidnight(System.currentTimeMillis())
-        return taskDao.getTasksDueOn(today).map { tasks ->
+        val today    = normaliseToMidnight(System.currentTimeMillis())
+        val todayEnd = today + 86_399_999L  // T018/US3: inclusive end-of-day
+        return taskDao.getTasksDueInRange(today, todayEnd).map { tasks ->
             val total     = tasks.size
             val completed = tasks.count { it.isCompleted }
             TodayProgressState(totalToday = total, completedToday = completed)
@@ -118,13 +119,23 @@ class TaskRepositoryImpl @Inject constructor(
         val validMask = when {
             scheduleMask == null -> null
             scheduleMask in 1..127 -> scheduleMask
-            else -> null // silently clamp invalid values to "every day"
+            else -> null // silently clamp invalid values to “every day”
+        }
+        val todayMidnight = normaliseToMidnight(System.currentTimeMillis())
+        // T012/US1: Recurring tasks always use 12:01 AM start and 11:59 PM end
+        // T015/US2: Non-recurring tasks with null dueDate default to 11:59 PM today
+        val resolvedStart = if (isRecurring) todayMidnight + 60_000L
+                            else normaliseToMidnight(startDate)
+        val resolvedDue   = when {
+            isRecurring          -> todayMidnight + 86_340_000L
+            dueDate != null      -> normaliseToMidnight(dueDate)
+            else                 -> todayMidnight + 86_340_000L
         }
         taskDao.insertTask(
             TaskEntity(
                 title        = title,
-                startDate    = normaliseToMidnight(startDate),
-                dueDate      = dueDate?.let { normaliseToMidnight(it) },
+                startDate    = resolvedStart,
+                dueDate      = resolvedDue,
                 isRecurring  = isRecurring,
                 scheduleMask = if (isRecurring) validMask else null
             )
@@ -133,38 +144,61 @@ class TaskRepositoryImpl @Inject constructor(
 
     override suspend fun updateTask(task: TaskEntity) {
         val existing = taskDao.getTaskById(task.id) ?: return
+        // T023/US4: Only preserve completionTimestamp when task is COMPLETED;
+        // for any other status clear the timestamp so history has no ghost entries.
+        val resolvedTimestamp = if (task.status == TaskStatus.COMPLETED)
+            existing.completionTimestamp
+        else
+            null
         taskDao.updateTask(
             task.copy(
-                completionTimestamp = existing.completionTimestamp,
+                completionTimestamp = resolvedTimestamp,
                 dueDate             = task.dueDate?.let { normaliseToMidnight(it) }
             )
         )
     }
 
     override suspend fun updateTaskStatus(task: TaskEntity, newStatus: TaskStatus) {
+        // T024/US4: COMPLETED → IN_PROGRESS is now a valid transition (clears timestamp)
         val validTransition = when (task.status) {
             TaskStatus.TODO        -> newStatus == TaskStatus.IN_PROGRESS || newStatus == TaskStatus.COMPLETED
-            TaskStatus.IN_PROGRESS -> newStatus == TaskStatus.COMPLETED
-            TaskStatus.COMPLETED   -> newStatus == TaskStatus.TODO
+            TaskStatus.IN_PROGRESS -> newStatus == TaskStatus.COMPLETED || newStatus == TaskStatus.TODO
+            TaskStatus.COMPLETED   -> newStatus == TaskStatus.TODO || newStatus == TaskStatus.IN_PROGRESS
         }
         if (!validTransition) return
 
         val justCompleted = newStatus == TaskStatus.COMPLETED
-        val undone        = task.status == TaskStatus.COMPLETED && newStatus == TaskStatus.TODO
+        // T024/US4: Clear timestamp when task moves OUT of COMPLETED state (both TODO and IN_PROGRESS)
+        val leavingCompleted = task.status == TaskStatus.COMPLETED && newStatus != TaskStatus.COMPLETED
 
         val newTimestamp = when {
             justCompleted && task.completionTimestamp == null -> System.currentTimeMillis()
-            undone                                           -> null
-            else                                             -> task.completionTimestamp
+            leavingCompleted                                  -> null
+            else                                              -> task.completionTimestamp
         }
 
         taskDao.updateTask(task.copy(status = newStatus, completionTimestamp = newTimestamp))
 
         if (task.isRecurring) {
             val today = normaliseToMidnight(System.currentTimeMillis())
-            taskCompletionLogDao.insertLog(
-                TaskCompletionLog(taskId = task.id, date = today, isCompleted = justCompleted)
-            )
+            // T022/US4: UPSERT pattern — check if a log already exists for today
+            // before inserting. Since TaskCompletionLog uses auto-generated PK with no
+            // unique constraint on (taskId, date), a plain INSERT always creates a new
+            // row. Using check-then-update prevents duplicate entries when a recurring
+            // task is completed, reverted, and completed again on the same calendar day.
+            val existingLog = taskCompletionLogDao.getLogForTaskDate(task.id, today)
+            if (existingLog != null) {
+                taskCompletionLogDao.updateLog(
+                    existingLog.copy(
+                        isCompleted = justCompleted,
+                        timestamp   = System.currentTimeMillis()
+                    )
+                )
+            } else {
+                taskCompletionLogDao.insertLog(
+                    TaskCompletionLog(taskId = task.id, date = today, isCompleted = justCompleted)
+                )
+            }
             if (justCompleted) {
                 recalculateStreaks(task.id)
                 checkAndAwardAchievements(task.id)
@@ -303,12 +337,13 @@ class TaskRepositoryImpl @Inject constructor(
             if (completedDay < today) {
                 val mask = task.scheduleMask
                 if (mask != null && (mask and todayBit) == 0) return@forEach
+                // T013/US1: Apply correct 12:01 AM / 11:59 PM time boundaries on refresh
                 taskDao.updateTask(
                     task.copy(
                         status              = TaskStatus.TODO,
                         completionTimestamp = null,
-                        startDate           = today,
-                        dueDate             = today
+                        startDate           = today + 60_000L,
+                        dueDate             = today + 86_340_000L
                     )
                 )
             }

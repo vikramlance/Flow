@@ -10,13 +10,35 @@ Sync Impact Report
   replaced thin bottom "## Testing" stub; updated plan-template.md and tasks-template.md)
 - Version change: 1.3.1 → 1.3.2 (PATCH: added Regression Testing Protocol — red-green
   regression tests required for every bug fix; tests must target the root-cause layer)
+- Version change: 1.3.2 → 1.4.0 (MINOR: added Principle VII Emoji Non-Negotiable —
+  unicode emoji MUST always render as intended; empty-string fallbacks prohibited;
+  any change touching emoji content requires an automated rendering test; ratified
+  from spec NC-001 / FR-017 in feature 001-ui-bug-fixes; 2026-02-25)
+- Version change: 1.4.0 → 1.5.0 (MINOR: added Principle VIII Device Connectivity Gate —
+  before any Tier 2/3 connected-device task the implementer MUST run adb devices,
+  and if no device is found MUST prompt the user interactively (never defer or skip);
+  strengthened Device Detection & Wait Protocol with mandatory interactive prompt;
+  added violation example and non-deferral rule to Anti-Patterns table;
+  ratified after 001-ui-bug-fixes session where T043 was deferred without running
+  the device check, in direct violation of the existing wait protocol; 2026-02-26)
+- Version change: 1.5.0 → 1.6.0 (MINOR: elevated Principle I to explicit highest non-negotiable
+  rule with strict existing-functionality preservation mandate and user-confirmation
+  requirement before any breaking change; added Principle IX Minimal Precise
+  Implementation — minimum code, concise, non-verbose, single-responsibility,
+  structured for readability and future change; added TDD Red-Green Protocol section
+  making red-green discipline MANDATORY for ALL code changes (not only bug fixes),
+  including requirement to run full test suite after every task; updated
+  plan-template.md and tasks-template.md with TDD enforcement; 2026-02-27)
 - Principles established:
-  - I. Additive Logic (Non-Regression)
+  - I. Additive Logic (Non-Regression) ⚑ HIGHEST NON-NEGOTIABLE
   - II. Data Integrity (Single Source of Truth)
   - III. Layered Architecture Boundaries
   - IV. State-Driven UI
   - V. Explicit Dependency Boundaries
   - VI. Security & Privacy (1.2.0 — NEW)
+  - VII. Emoji Non-Negotiable (1.4.0 — NEW)
+  - VIII. Device Connectivity Gate (1.5.0 — NEW)
+  - IX. Minimal Precise Implementation (1.6.0 — NEW)
 - Sections established:
   - Core Principles
   - Platform Bindings (Current Implementation)
@@ -37,11 +59,21 @@ Sync Impact Report
 
 ## Core Principles
 
-### I. Additive Logic (Non-Regression)
+### I. Additive Logic (Non-Regression) ⚑ HIGHEST NON-NEGOTIABLE
+
+**This is the single most important rule in this constitution.**
+Preserving existing functionality is non-negotiable. When any
+conflict exists between shipping new behaviour and keeping
+existing behaviour intact, existing behaviour wins — unless the
+user has explicitly and deliberately requested the change.
 
 New features MUST be additive — they MUST NOT break existing
 features, user flows, or stored data.
 
+- **Existing functionality MUST be preserved absolutely.** If a
+  proposed change risks breaking any existing user flow, the
+  implementer MUST stop, document the risk, and confirm with the
+  user before proceeding. There is no acceptable trade-off.
 - Every change that could alter behavior MUST include a
   non-regression verification plan (automated tests when present;
   documented manual verification steps otherwise).
@@ -184,7 +216,135 @@ information, and MUST NOT introduce security vulnerabilities.
 exposed PII, or an exploitable vulnerability — causes
 irreversible harm to users and trust. Security is not a
 exclusive Phase-7 concern: guardrails MUST be applied from the
-first commit. (Current Implementation)
+first commit.
+
+### VII. Emoji Non-Negotiable
+
+Unicode emoji characters MUST always render as their intended
+visual symbols throughout the application.
+
+- **MUST render**: Every emoji used in UI, strings, or any
+  user-facing content MUST display as its intended pictographic
+  symbol on all supported platform versions. Replacement
+  characters (�), empty strings, tofu boxes, or garbled
+  sequences are defects, not acceptable fallbacks.
+- **Empty-string fallbacks are prohibited**: Returning `""`
+  (empty string) in place of an emoji character is a code
+  defect and MUST NOT be merged.
+- **Automated test required**: Any code change that adds,
+  modifies, serializes, or transmits emoji string content MUST
+  include a specific automated test asserting that the emoji
+  renders as a non-empty, valid Unicode code-point sequence.
+  Asserting `string.isNotEmpty()` and that the string contains
+  at least one code point in the emoji range (\u231A–\uFFFD,
+  supplementary plane \uD800–\uDFFF pairs) is the minimum bar.
+- **Root-cause layer**: Emoji rendering tests MUST live at the
+  layer where the emoji value is produced (ViewModel helper,
+  composable function, string resource) — not only at the UI
+  screenshot layer.
+
+**Rationale**: Emojis are primary visual language in the Flow
+app. An accidental empty-string replacement is invisible during
+code review (the reviewer sees `""`, not a broken emoji) and
+survives all non-emoji-specific tests. Codifying this as a
+non-negotiable principle with a mandatory test requirement is the
+only reliable guard. This principle was ratified after a
+production regression where `achievementEmoji()` silently
+returned empty strings for all six achievement types (root-cause:
+a refactor stripped the emoji literals without a failing test).
+
+### VIII. Device Connectivity Gate
+
+Before executing **any** Tier 2 or Tier 3 connected-device test
+task, the implementer MUST verify that an Android device is
+reachable via ADB.
+
+**Mandatory pre-flight check** (run before every
+`connectedDebugAndroidTest` or Tier 3 E2E invocation):
+
+```powershell
+$adb = "C:\Users\vikra\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+$devices = & $adb devices 2>&1 | Where-Object { $_ -match "\bdevice\b" -and $_ -notmatch "^List" }
+if (-not $devices) {
+    Write-Host "⚠ No Android device detected."
+    Write-Host "Please connect a physical device via USB (enable USB debugging)"
+    Write-Host "OR start an AVD in Android Studio → Tools → Device Manager → ▶"
+    Write-Host "Then re-run this task."
+    # In interactive sessions: STOP and ask the user to connect the device.
+    # In automated CI: exit 1 immediately (fail-fast, no silent skip).
+    exit 1
+}
+Write-Host "✓ Device found: $devices"
+```
+
+**Rules**:
+
+- **Interactive sessions**: If no device is detected, the
+  implementer MUST stop and **explicitly ask the user** to
+  connect a device. The task MUST NOT be deferred, skipped, or
+  marked as "requires device" and moved to a future session
+  without running the check first.
+- **CI / automated pipelines**: MUST fail-fast at this gate
+  with a non-zero exit code. Silent skipping is prohibited.
+- **Task ordering**: The device check MUST be the very first
+  step of any session that contains Tier 2/3 tasks, not an
+  afterthought once unit tests have completed.
+- **Deferral is a violation**: Moving a connected-device task
+  to a subsequent session without running `adb devices` first —
+  even when a device is unavailable — is a direct violation of
+  this principle. The correct response is to run the check,
+  confirm no device is present, then ask the user before
+  deferring.
+
+**Known violation**:
+
+In feature `001-ui-bug-fixes`, task T043
+(`connectedDebugAndroidTest`) was deferred to a later session
+after all JVM unit tests passed without ever running `adb
+devices`. This violated both this principle and the existing
+Device Detection & Wait Protocol below. Root cause: the
+implementing agent treated device availability as a
+"skip if unavailable" condition rather than a blocking gate
+requiring user interaction.
+
+**Rationale**: Connected-device tests catch Room migration
+bugs, Compose UI regressions, and Hilt wiring errors that no
+JVM test can reach. Deferring them silently creates a false
+impression that a feature is complete when its most
+environmentally realistic tests have never run. The interactive
+prompt requirement ensures the user is always aware and in
+control of this gate.
+### IX. Minimal Precise Implementation
+
+Every code change MUST be the minimum necessary to satisfy the
+stated requirement. Code quantity is not a proxy for quality.
+
+- **Minimum code**: Implement exactly what is needed and nothing
+  more. Do not add speculative features, over-engineered
+  abstractions, or unnecessary helper functions.
+- **Concise over verbose**: Every function, class, and file MUST
+  be as short as clarity allows. Boilerplate, duplicated logic,
+  and dead code are defects that MUST be removed.
+- **Single responsibility**: Each function and class MUST do one
+  thing. If a unit requires a multi-clause description, split it.
+- **Structured for change**: Write code so that the next
+  modification is obvious. Prefer small, composable, well-named
+  units over monolithic blocks with inline comments.
+- **Self-documenting naming**: Code MUST communicate intent
+  through naming and structure. A comment explaining *what* code
+  does is a warning sign that the code should be clearer. A
+  comment explaining *why* (non-obvious constraint, edge case) is
+  valuable and encouraged.
+- **No verbose test boilerplate**: Tests MUST be as concise as
+  production code — one focused assertion per test case where
+  practical, names following `<scenario>_<when>_<expected>`.
+
+**Rationale**: Verbose, sprawling code is harder to review,
+harder to reason about, and creates more surface area for
+regressions. Precision and conciseness are active
+defect-prevention measures, not aesthetic preferences. Every
+extra line is a line that can break.
+(Current Implementation)
 
 The Core Principles above are **platform-agnostic**. Below are the
 current Android bindings; an iOS implementation would substitute
@@ -282,6 +442,64 @@ follow it before declaring the work complete.
 - If a dedicated E2E suite does not yet exist, Tier 2 connected
   tests serve as the system gate until the suite is created.
 
+### TDD Red-Green Protocol (All Code Changes)
+
+**This protocol is MANDATORY for every code change — new
+features, bug fixes, and refactors alike.** The red-green
+discipline is not optional for "simple" changes.
+
+**Step 1 — Red (write the failing test first)**
+Before writing any implementation code, write the test that
+specifies the desired behaviour. Run it. It MUST FAIL. A test
+that passes before the implementation exists proves nothing and
+is a violation of this protocol.
+
+**Step 2 — Green (write the minimum code to pass)**
+Write the smallest, simplest implementation that makes the
+failing test pass. Do not add code "just in case". Once the
+test passes, the implementation is correct by specification.
+
+**Step 3 — Refactor (clean without breaking)**
+With the test green, refactor for clarity and conciseness per
+Principle IX. Re-run tests. They MUST still pass. Do not skip
+this step — it is where code quality is enforced.
+
+**Step 4 — Run the full suite after every task**
+After completing each task (not batched to the end of a feature
+sequence), run the full test suite. A regression discovered
+immediately after one change is easy to root-cause. A regression
+discovered after ten changes is not.
+
+```powershell
+# After every code change:
+.\gradlew testDebugUnitTest         # Tier 1 — must be zero failures
+# If device available (run Principle VIII pre-flight check first):
+.\gradlew connectedDebugAndroidTest  # Tier 2/3 — must be zero failures
+```
+
+**Rules**:
+- Writing implementation code BEFORE a failing test is a
+  violation. There is no exception for "trivial" changes.
+- Tests MUST be run after EVERY task, not batched to the end of
+  a feature. Regressions caught immediately are cheap; caught
+  later they are expensive.
+- A feature is NOT complete until ALL test tiers pass — not
+  just the tier whose code was modified.
+- Comprehensive coverage is required: every new public function,
+  ViewModel state transition, and DAO query MUST have at least
+  one test for its primary path and one for its primary
+  failure/edge-case path.
+
+**TDD Anti-Patterns (Prohibited)**:
+
+| Anti-pattern | Why prohibited |
+|---|---|
+| Writing code first, then tests to match | Tests become rubber stamps that verify what the code does, not what it should do. |
+| Batching all test runs to end of task list | Regressions compound; root cause becomes impossible to isolate. |
+| Partial run: "I only changed X, so I'll only test X" | Regressions are caused by unexpected coupling. The full suite is the only safe gate. |
+| "It works manually, no test needed" | Manual verification is not reproducible, not enforceable in CI, and is explicitly prohibited by Gate 5. |
+| Skipping Step 3 (refactor) after going green | Produces code that passes tests but violates Principle IX. |
+
 ### Device Detection & Wait Protocol
 
 Before running any Tier 2 or Tier 3 command, execute the
@@ -314,6 +532,21 @@ do {
 } while ($true)
 ```
 
+**Interactive prompt (required when no device found)**:
+
+Before entering the wait loop, the agent MUST output:
+
+```
+⚠ No Android device found.
+Please connect your Android device via USB (ensure USB debugging
+is enabled in Developer Options) OR start an AVD in Android
+Studio → Tools → Device Manager → ▶.
+Waiting up to 5 minutes... (Ctrl+C to abort)
+```
+
+The agent MUST NOT silently defer the task to a future session
+without first running this check and displaying this prompt.
+
 **If waiting is not feasible** (e.g., CI environment without a
 connected device), create an Android Virtual Device (AVD) first:
 
@@ -345,6 +578,8 @@ Start-Process -NoNewWindow "$env:ANDROID_HOME\emulator\emulator" `
 | Adding a task "manual QA on device" as a substitute for a Tier 3 test | Manual steps are not reproducible, not tracked, and not enforceable in CI. |
 | Marking a change complete before all tiers pass | Violates Gate 5 and the Additive Logic gate simultaneously. |
 | Running only the changed-module tests to "save time" | All tiers MUST run on the full project; partial runs are informational only. |
+| Deferring a connected-device task without running `adb devices` first | Even when a device is unavailable, the check MUST run and the user MUST be asked. Deferral without the check is a violation of Principle VIII. |
+| Marking device-dependent tasks complete after unit tests pass | A task tier that includes `connectedDebugAndroidTest` is NOT complete until that command produces a passing result on a real or virtual device. |
 
 ## Regression Testing Protocol
 
@@ -512,4 +747,4 @@ document MUST be corrected.
 - Code reviews MUST verify Additive Logic, Data Integrity,
   and Consistency gates before approval.
 
-**Version**: 1.3.2 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-22
+**Version**: 1.6.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-27
