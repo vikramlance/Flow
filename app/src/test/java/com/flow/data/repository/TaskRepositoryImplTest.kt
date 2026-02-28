@@ -83,27 +83,28 @@ class TaskRepositoryImplTest {
     // ── T010/US1: Recurring task time boundaries ──────────────────────────────
 
     @Test
-    fun addRecurringTask_startsAt1201am_endsAt1159pm() = runTest {
+    fun addRecurringTask_preservesCallerStartDate() = runTest {
+        // T019/US3: addTask no longer overrides startDate to 12:01 AM.
+        // The dialog (T020) is responsible for supplying the desired default time.
         val capturedTask = slot<TaskEntity>()
         coEvery { taskDao.insertTask(capture(capturedTask)) } returns 1L
 
+        val inputStartDate = System.currentTimeMillis()
         repository.addTask(
             title        = "Daily Habit",
-            startDate    = System.currentTimeMillis(),
+            startDate    = inputStartDate,
             dueDate      = null,
             isRecurring  = true,
             scheduleMask = null
         )
 
-        val midnight = todayMidnight()
         assertEquals(
-            "Recurring task startDate must be midnight + 60 000 ms (12:01 AM)",
-            midnight + 60_000L,
+            "T019: addTask(isRecurring=true) must preserve caller-supplied startDate",
+            inputStartDate,
             capturedTask.captured.startDate
         )
-        assertEquals(
-            "Recurring task dueDate must be midnight + 86 340 000 ms (11:59 PM)",
-            midnight + 86_340_000L,
+        assertNull(
+            "T019: addTask(isRecurring=true, dueDate=null) must store null dueDate",
             capturedTask.captured.dueDate
         )
     }
@@ -172,7 +173,9 @@ class TaskRepositoryImplTest {
     // ── T014/US2: Non-recurring null dueDate defaults to end of today ─────────
 
     @Test
-    fun addNonRecurringTask_nullDueDate_defaultsToEndOfToday() = runTest {
+    fun addNonRecurringTask_nullDueDate_storesNull() = runTest {
+        // T019/US3: addTask no longer synthesizes a default 11:59 PM dueDate.
+        // The dialog (T020) supplies defaultEndTime() before calling addTask.
         val capturedTask = slot<TaskEntity>()
         coEvery { taskDao.insertTask(capture(capturedTask)) } returns 2L
 
@@ -184,10 +187,8 @@ class TaskRepositoryImplTest {
             scheduleMask = null
         )
 
-        val midnight = todayMidnight()
-        assertEquals(
-            "Non-recurring task with null dueDate must default to midnight + 86 340 000 ms (11:59 PM)",
-            midnight + 86_340_000L,
+        assertNull(
+            "T019: addTask(dueDate=null) must pass null through — dialog is responsible for default",
             capturedTask.captured.dueDate
         )
     }
@@ -207,7 +208,7 @@ class TaskRepositoryImplTest {
         )
 
         assertEquals(
-            "Explicit dueDate must be preserved (normalised to midnight of that day)",
+            "T019: Explicit dueDate must be passed through unchanged",
             todayMidnight() + 86_400_000L,
             capturedTask.captured.dueDate
         )

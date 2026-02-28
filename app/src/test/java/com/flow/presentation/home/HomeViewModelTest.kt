@@ -155,4 +155,53 @@ class HomeViewModelTest {
         assertFalse(vm.uiState.value.isLoading)
         job.cancel()
     }
+
+    // ── T027/CO-001: scheduleMask=0 validation ────────────────────────────────
+
+    @Test
+    fun `addTask recurring with scheduleMask=0 does not call repository and sets error`() = runTest {
+        val vm = HomeViewModel(fakeRepo, fakeSettings)
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        val taskCountBefore = fakeRepo.allTasksFlow.value.size
+
+        vm.addTask(title = "Habit", isRecurring = true, scheduleMask = 0)
+        advanceUntilIdle()
+
+        // repository.addTask must NOT have been called
+        assertEquals(
+            "T027: addTask(scheduleMask=0) must not insert a task",
+            taskCountBefore,
+            fakeRepo.allTasksFlow.value.size
+        )
+        assertTrue(
+            "T027: uiState.scheduleMaskError must be true when scheduleMask=0",
+            vm.uiState.value.scheduleMaskError
+        )
+        job.cancel()
+    }
+
+    @Test
+    fun `addTask recurring with scheduleMask=127 calls repository and clears error`() = runTest {
+        val vm = HomeViewModel(fakeRepo, fakeSettings)
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        val taskCountBefore = fakeRepo.allTasksFlow.value.size
+
+        vm.addTask(title = "Habit", isRecurring = true, scheduleMask = 127)
+        advanceUntilIdle()
+
+        assertEquals(
+            "T027: addTask(scheduleMask=127) must insert a task",
+            taskCountBefore + 1,
+            fakeRepo.allTasksFlow.value.size
+        )
+        assertFalse(
+            "T027: uiState.scheduleMaskError must be false when scheduleMask is valid",
+            vm.uiState.value.scheduleMaskError
+        )
+        job.cancel()
+    }
 }

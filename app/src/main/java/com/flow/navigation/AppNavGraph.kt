@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.flow.presentation.achievements.AchievementsScreen
 import com.flow.presentation.analytics.AnalyticsScreen
 import com.flow.presentation.history.GlobalHistoryScreen
 import com.flow.presentation.history.TaskHistoryScreen
@@ -16,13 +17,18 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(Routes.HOME) {
             HomeScreen(
-                onNavigateToAnalytics = { navController.navigate(Routes.ANALYTICS) },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onNavigateToTaskHistory = { taskId ->
+                onNavigateToAnalytics     = { navController.navigate(Routes.ANALYTICS) },
+                onNavigateToSettings      = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToTaskHistory   = { taskId ->
                     navController.navigate(Routes.taskStreak(taskId))
                 },
-                onNavigateToHistory = { navController.navigate(Routes.HISTORY) }
+                onNavigateToHistory       = { navController.navigate(Routes.HISTORY) },
+                onNavigateToAchievements  = { navController.navigate(Routes.ACHIEVEMENTS) }
             )
+        }
+
+        composable(Routes.ACHIEVEMENTS) {
+            AchievementsScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.ANALYTICS) {

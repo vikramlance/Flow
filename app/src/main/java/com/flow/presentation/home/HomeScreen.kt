@@ -1,4 +1,4 @@
-package com.flow.presentation.home
+﻿package com.flow.presentation.home
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -23,9 +23,13 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import com.flow.data.local.TaskStatus
+import com.flow.util.defaultEndTime
+import com.flow.util.endTimeForDate
+import com.flow.util.mergeDateTime
 import com.flow.util.utcDateToLocalMidnight
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -56,6 +60,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToTaskHistory: (Long) -> Unit,
     onNavigateToHistory: () -> Unit,
+    onNavigateToAchievements: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -83,6 +88,9 @@ fun HomeScreen(
                    }
                    IconButton(onClick = onNavigateToHistory) {
                        Icon(Icons.Default.History, contentDescription = "History", tint = NeonGreen, modifier = Modifier.size(28.dp))
+                   }
+                   IconButton(onClick = onNavigateToAchievements) {
+                       Icon(Icons.Default.EmojiEvents, contentDescription = "Achievements", tint = NeonGreen, modifier = Modifier.size(28.dp))
                    }
                    IconButton(onClick = { viewModel.showHelp() }) {
                        Icon(Icons.Default.Info, contentDescription = "Help", tint = NeonGreen, modifier = Modifier.size(28.dp))
@@ -212,7 +220,8 @@ fun HomeScreen(
         
         if (showAddDialog) {
             AddTaskDialog(
-                onDismiss = { showAddDialog = false },
+                onDismiss          = { showAddDialog = false },
+                scheduleMaskError  = uiState.scheduleMaskError,
                 onAdd = { title, startDate, dueDate, isRecurring, scheduleMask ->
                     viewModel.addTask(title, startDate, dueDate, isRecurring, scheduleMask)
                     showAddDialog = false
@@ -338,20 +347,20 @@ fun HelpOverlay(onDismiss: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "â„¹ï¸ How to use Flow",
+                    text = "\u2139\uFE0F How to use Flow",
                     style = MaterialTheme.typography.headlineSmall,
                     color = NeonGreen
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
                 val tips = listOf(
-                    "ðŸ‘† Tap a task card to advance its status: TODO â†’ In Progress â³ â†’ Done âœ…",
-                    "âœï¸ Long-press any card to edit or delete it.",
-                    "ðŸŒ± Recurring tasks track your daily completion streak.",
-                    "â±ï¸ Use the Focus Timer to stay in the zone.",
-                    "ðŸ“Š Tap Analytics to view your heatmap and stats.",
-                    "ðŸ“‹ Tap History to see all completed tasks.",
-                    "ðŸŽ¯ The dashboard colour: Green â‰¥100% Â· Yellow â‰¥50% Â· Orange <50%."
+                    "\uD83D\uDC46 Tap a task card to advance its status: TODO \u2192 In Progress \u23F3 \u2192 Done \u2705",
+                    "\u270F\uFE0F Long-press any card to edit or delete it.",
+                    "\uD83C\uDF31 Recurring tasks track your daily completion streak.",
+                    "\u23F1\uFE0F Use the Focus Timer to stay in the zone.",
+                    "\uD83D\uDCCA Tap Analytics to view your heatmap and stats.",
+                    "\uD83D\uDCCB Tap History to see all completed tasks.",
+                    "\uD83C\uDFAF The dashboard colour: Green \u2265100% \u00B7 Yellow \u226550% \u00B7 Orange <50%."
                 )
 
                 tips.forEach { tip ->
@@ -433,7 +442,7 @@ fun TaskItem(
             .height(140.dp)
             .combinedClickable(
                 onClick = {
-                    // Cycle: TODO â†’ IN_PROGRESS â†’ COMPLETED â†’ TODO
+                    // Cycle: TODO \u2192 IN_PROGRESS \u2192 COMPLETED \u2192 TODO
                     val nextStatus = when (status) {
                         com.flow.data.local.TaskStatus.TODO -> com.flow.data.local.TaskStatus.IN_PROGRESS
                         com.flow.data.local.TaskStatus.IN_PROGRESS -> com.flow.data.local.TaskStatus.COMPLETED
@@ -458,7 +467,7 @@ fun TaskItem(
                  // Status Icon
                  when (status) {
                      com.flow.data.local.TaskStatus.COMPLETED -> Icon(Icons.Default.Check, contentDescription = null, tint = contentColor)
-                     com.flow.data.local.TaskStatus.IN_PROGRESS -> Text("â³", style = MaterialTheme.typography.bodyLarge)
+                     com.flow.data.local.TaskStatus.IN_PROGRESS -> Text("\u23F3", style = MaterialTheme.typography.bodyLarge)
                      else -> Box(modifier = Modifier.size(24.dp))
                  }
                  
@@ -467,7 +476,7 @@ fun TaskItem(
                           verticalAlignment = Alignment.CenterVertically,
                           modifier = Modifier.clickable { onShowStreak() }
                       ) {
-                          Text("ðŸŒ±", style = MaterialTheme.typography.bodyLarge)
+                          Text("\uD83C\uDF31", style = MaterialTheme.typography.bodyLarge)
                           if (streakCount > 0) {
                               Spacer(modifier = Modifier.width(4.dp))
                               Text(
@@ -535,14 +544,20 @@ fun TaskItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, Int?) -> Unit) {
+fun AddTaskDialog(
+    onDismiss: () -> Unit,
+    scheduleMaskError: Boolean = false,
+    onAdd: (String, Long, Long?, Boolean, Int?) -> Unit
+) {
     var text by remember { mutableStateOf("") }
     var isRecurring by remember { mutableStateOf(false) }
-    var scheduleMask by remember { mutableStateOf<Int?>(null) } // null = every day
-    
-    val currentMillis = System.currentTimeMillis()
-    var startDate by remember { mutableLongStateOf(currentMillis) }
-    var dueDate by remember { mutableStateOf<Long?>(null) }
+    // T025/US4: default to 127 (all 7 days) so chips appear fully-selected when dialog opens
+    var scheduleMask by remember { mutableStateOf<Int?>(127) }
+
+    // T020/US3: capture dialog-open time once so date-picker changes don't re-sample it
+    val dialogOpenTime = remember { System.currentTimeMillis() }
+    var startDate by remember { mutableLongStateOf(dialogOpenTime) }
+    var dueDate by remember { mutableStateOf<Long?>(defaultEndTime()) }
     
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showTargetDatePicker by remember { mutableStateOf(false) }
@@ -624,13 +639,23 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
                     )
                     Text("Track Streak (Recurring)", color = Color.White)
                 }
-                
+
+                // T025/US4: Show day-selector below the checkbox when isRecurring is checked
+                if (isRecurring) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScheduleDaySelector(
+                        mask        = scheduleMask ?: 127,
+                        onMaskChange = { scheduleMask = it },
+                        isError     = scheduleMaskError
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Button(
                     onClick = { 
                         if (text.isNotBlank()) {
-                            onAdd(text, startDate, dueDate, isRecurring, scheduleMask)
+                            onAdd(text, startDate, dueDate, isRecurring, if (isRecurring) scheduleMask else null)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black),
@@ -650,7 +675,7 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        startDate = utcDateToLocalMidnight(it)
+                        startDate = mergeDateTime(utcDateToLocalMidnight(it), dialogOpenTime)
                         showStartDatePicker = false
                         showStartTimePicker = true
                     }
@@ -691,13 +716,13 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
     }
 
     if (showTargetDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueDate ?: currentMillis)
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueDate ?: dialogOpenTime)
         DatePickerDialog(
             onDismissRequest = { showTargetDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        dueDate = utcDateToLocalMidnight(it)
+                        dueDate = endTimeForDate(utcDateToLocalMidnight(it))
                         showTargetDatePicker = false
                         showTargetTimePicker = true
                     }
@@ -709,7 +734,7 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
     }
 
     if (showTargetTimePicker) {
-        val calendar = Calendar.getInstance().apply { timeInMillis = dueDate ?: currentMillis }
+        val calendar = Calendar.getInstance().apply { timeInMillis = dueDate ?: dialogOpenTime }
         val timePickerState = rememberTimePickerState(
             initialHour = calendar.get(Calendar.HOUR_OF_DAY),
             initialMinute = calendar.get(Calendar.MINUTE)
@@ -724,7 +749,7 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
                         TextButton(onClick = { showTargetTimePicker = false }) { Text("Cancel") }
                         TextButton(onClick = {
                             val cal = Calendar.getInstance().apply {
-                                timeInMillis = dueDate ?: currentMillis
+                                timeInMillis = dueDate ?: dialogOpenTime
                                 set(Calendar.HOUR_OF_DAY, timePickerState.hour)
                                 set(Calendar.MINUTE, timePickerState.minute)
                             }
@@ -738,6 +763,31 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, Long?, Boolean, I
     }
 }
 
+// ── T021/US3 — EditTaskDialog time-default helpers ─────────────────────────── //
+
+/**
+ * Returns [taskDueDate] if non-null; otherwise defaults to 11:59 PM today via
+ * [com.flow.util.DateUtils.defaultEndTime]. Extracted as an `internal` function
+ * so it can be unit-tested without the Compose runtime.
+ */
+internal fun resolveEditDialogDueDate(taskDueDate: Long?): Long? =
+    taskDueDate ?: defaultEndTime()
+
+/**
+ * Returns [taskStartDate] if non-zero; otherwise returns the current clock time.
+ * Handles legacy tasks whose `startDate` was stored as epoch zero or never set.
+ */
+internal fun resolveEditDialogStartDate(taskStartDate: Long): Long =
+    if (taskStartDate == 0L) System.currentTimeMillis() else taskStartDate
+
+/**
+ * Returns [taskScheduleMask] if non-null; otherwise returns 127 (all days selected)
+ * for backward compatibility with recurring tasks that predate the schedule feature
+ * (FR-018).
+ */
+internal fun resolveInitialScheduleMask(taskScheduleMask: Int?): Int =
+    taskScheduleMask ?: 127
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditTaskDialog(
@@ -749,10 +799,13 @@ fun EditTaskDialog(
     var title by remember { mutableStateOf(task.title) }
     var isRecurring by remember { mutableStateOf(task.isRecurring) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
-    
+    // T026/US4: initialise from stored mask; null (legacy) defaults to 127 via FR-018
+    var scheduleMask by remember { mutableStateOf(resolveInitialScheduleMask(task.scheduleMask)) }
+
     val currentMillis = System.currentTimeMillis()
-    var startDate by remember { mutableLongStateOf(task.startDate) }
-    var dueDate by remember { mutableStateOf<Long?>(task.dueDate) }
+    // T021/US3: apply default-time helpers so legacy null/zero values show sensible defaults
+    var startDate by remember { mutableLongStateOf(resolveEditDialogStartDate(task.startDate)) }
+    var dueDate by remember { mutableStateOf<Long?>(resolveEditDialogDueDate(task.dueDate)) }
     
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showTargetDatePicker by remember { mutableStateOf(false) }
@@ -834,7 +887,17 @@ fun EditTaskDialog(
                     )
                     Text("Track Streak (Recurring)", color = Color.White)
                 }
-                
+
+                // T026/US4: Show day-selector below the checkbox when isRecurring is checked
+                if (isRecurring) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ScheduleDaySelector(
+                        mask         = scheduleMask,
+                        onMaskChange = { scheduleMask = it },
+                        isError      = false   // validation only in AddTaskDialog (T027)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Row(
@@ -856,7 +919,8 @@ fun EditTaskDialog(
                                     title = title,
                                     startDate = startDate,
                                     dueDate = dueDate,
-                                    isRecurring = isRecurring
+                                    isRecurring = isRecurring,
+                                    scheduleMask = if (isRecurring) scheduleMask else null
                                 ))
                             }
                         },
@@ -944,7 +1008,7 @@ fun EditTaskDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        dueDate = utcDateToLocalMidnight(it)
+                        dueDate = endTimeForDate(utcDateToLocalMidnight(it))
                         showTargetDatePicker = false
                         showTargetTimePicker = true
                     }
@@ -1113,7 +1177,7 @@ fun FocusTimerDialog(onDismiss: () -> Unit) {
                                 color = NeonGreen
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Take a break! ðŸ”‹", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+                            Text("Take a break! \uD83D\uDD0B", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
                         } else {
                             Text(
                                 text = String.format("%02d:%02d", minutes, seconds),
@@ -1197,7 +1261,7 @@ fun TaskStreakDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("ðŸŒ±", style = MaterialTheme.typography.displaySmall)
+                    Text("\uD83C\uDF31", style = MaterialTheme.typography.displaySmall)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "$streak Days",
@@ -1273,3 +1337,115 @@ private fun getCalendarStartOfDay(timeMillis: Long): Long {
     cal.set(Calendar.MILLISECOND, 0)
     return cal.timeInMillis
 }
+
+// ── T024/US4 — ScheduleDaySelector pure helpers ───────────────────────────── //
+
+/**
+ * Quick-select presets for the [ScheduleDaySelector].
+ *
+ * Bit layout (matches [com.flow.domain.streak.DayMask]):
+ *   bit 0 = Monday … bit 6 = Sunday
+ */
+enum class SchedulePreset(val mask: Int) {
+    ALL_DAYS(127),   // 0b1111111
+    WEEKDAYS(31),    // 0b0011111 — Mon–Fri (bits 0–4)
+    WEEKENDS(96)     // 0b1100000 — Sat+Sun (bits 5–6)
+}
+
+/**
+ * Returns the canonical bitmask value for the given [preset].
+ * Extracted as an `internal` function for JVM unit-test access.
+ */
+internal fun applySchedulePreset(preset: SchedulePreset): Int = preset.mask
+
+/**
+ * Toggles the [bit]-th day in [mask] via XOR.
+ * Bit 0 = Monday … bit 6 = Sunday.
+ */
+internal fun toggleDayBit(mask: Int, bit: Int): Int = mask xor (1 shl bit)
+
+/**
+ * Returns true when [mask] encodes at least one selected day (or is null, which
+ * means "every day" — FR-018).
+ */
+internal fun isScheduleMaskValid(mask: Int?): Boolean = mask == null || mask != 0
+
+// ── T024 Step 2 — ScheduleDaySelector composable ─────────────────────────── //
+
+private val dayLabels = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+
+/**
+ * A row of preset quick-select buttons and a 7-chip day grid for picking a
+ * weekly recurrence schedule.
+ *
+ * The composable is purely presentational — all logic is handled by [applySchedulePreset]
+ * and [toggleDayBit]. It does not produce a valid-mask guard; the caller is
+ * responsible for passing [isError] based on ViewModel validation (CO-001).
+ *
+ * @param mask        Current bitmask (bit 0 = Monday … bit 6 = Sunday). Null = every day.
+ * @param onMaskChange Called with the updated mask whenever the user taps a preset or chip.
+ * @param isError     When true, shows a red validation message below the chips.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ScheduleDaySelector(
+    mask: Int,
+    onMaskChange: (Int) -> Unit,
+    isError: Boolean = false
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // ── Preset quick-select row ───────────────────────────────────────────
+        Row(
+            modifier            = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SchedulePreset.entries.forEach { preset ->
+                TextButton(onClick = { onMaskChange(applySchedulePreset(preset)) }) {
+                    Text(
+                        text  = when (preset) {
+                            SchedulePreset.ALL_DAYS -> "All"
+                            SchedulePreset.WEEKDAYS -> "Weekdays"
+                            SchedulePreset.WEEKENDS -> "Weekends"
+                        },
+                        color = NeonGreen,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ── Day chips ─────────────────────────────────────────────────────────
+        FlowRow(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            dayLabels.forEachIndexed { bitIndex, label ->
+                val selected = (mask shr bitIndex) and 1 == 1
+                FilterChip(
+                    selected = selected,
+                    onClick  = { onMaskChange(toggleDayBit(mask, bitIndex)) },
+                    label    = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                    colors   = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor     = NeonGreen,
+                        selectedLabelColor         = Color.Black,
+                        containerColor             = SurfaceDark,
+                        labelColor                 = Color.White
+                    )
+                )
+            }
+        }
+
+        // ── Validation error ──────────────────────────────────────────────────
+        if (isError) {
+            Text(
+                text  = "Select at least one day",
+                color = TaskOverdue,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+

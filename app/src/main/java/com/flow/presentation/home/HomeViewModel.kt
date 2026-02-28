@@ -24,14 +24,16 @@ class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val _helpVisible = MutableStateFlow(false)
+    private val _helpVisible          = MutableStateFlow(false)
+    private val _scheduleMaskError    = MutableStateFlow(false)
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.getHomeScreenTasks(),
         repository.getTodayProgress(),
         settingsRepository.isFirstLaunch,
-        _helpVisible
-    ) { homeTasks, todayProgressState, isFirstLaunch, helpVisible ->
+        _helpVisible,
+        _scheduleMaskError
+    ) { homeTasks, todayProgressState, isFirstLaunch, helpVisible, scheduleMaskError ->
         val now = System.currentTimeMillis()
         val todayStart = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
@@ -52,7 +54,8 @@ class HomeViewModel @Inject constructor(
             todayProgressState = todayProgressState,
             isFirstLaunch      = isFirstLaunch,
             isLoading          = false,
-            showHelp           = helpVisible
+            showHelp           = helpVisible,
+            scheduleMaskError  = scheduleMaskError
         )
     }.stateIn(
         scope         = viewModelScope,
@@ -80,6 +83,12 @@ class HomeViewModel @Inject constructor(
         isRecurring: Boolean = false,
         scheduleMask: Int? = null
     ) {
+        // T027/CO-001: block save when recurring task has no days selected (scheduleMask==0)
+        if (isRecurring && scheduleMask == 0) {
+            _scheduleMaskError.value = true
+            return
+        }
+        _scheduleMaskError.value = false
         viewModelScope.launch {
             repository.addTask(title, startDate, dueDate, isRecurring, scheduleMask)
         }

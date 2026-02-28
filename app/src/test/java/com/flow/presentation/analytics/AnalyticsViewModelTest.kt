@@ -1,7 +1,5 @@
 package com.flow.presentation.analytics
 
-import com.flow.data.local.AchievementEntity
-import com.flow.data.local.AchievementType
 import com.flow.data.repository.CurrentYearStats
 import com.flow.data.repository.LifetimeStats
 import com.flow.data.repository.TaskRepository
