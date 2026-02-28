@@ -133,3 +133,11 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Report final status with summary of completed work
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit.tasks` first to regenerate the task list.
+
+10. Repository Hygiene:
+   - **Internal Scripts**: Temporary/ad-hoc scripts (.sh, .ps1) MUST NOT be created at the repo root. Always store them in .specify/scripts/backup/.
+   - **Log Files**: All output captures and textual reports must safely route into logs/ (never at root).
+
+10. Repository Hygiene:
+   - **Internal Scripts**: Temporary/ad-hoc scripts (.sh, .ps1) MUST NOT be created at the repo root. Always store them in .specify/scripts/backup/.
+   - **Log Files**: All output captures and textual reports must safely route into logs/ (never at root).
