@@ -8,6 +8,13 @@ build/
 # Local configuration file (sdk path, etc)
 local.properties
 
+# Machine-local environment config — never commit
+# Copy .local/env.ps1.template to .local/env.ps1 with real values
+.local/*
+!.local/env.ps1.template
+!.local/README.md
+
+
 # IntelliJ
 .idea/
 *.iml

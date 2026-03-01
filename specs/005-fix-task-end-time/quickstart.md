@@ -22,7 +22,8 @@ Run after every task. Must be zero failures.
 
 ```powershell
 # Pre-flight device check (Principle VIII)
-$adb = "C:\Users\vikra\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+# Uses ANDROID_HOME env var (set in .local/env.ps1) or falls back to PATH.
+$adb = if ($env:ANDROID_HOME) { "$env:ANDROID_HOME\platform-tools\adb.exe" } else { "adb" }
 & $adb devices
 
 # Full suite

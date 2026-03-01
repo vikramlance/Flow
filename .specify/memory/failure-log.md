@@ -75,6 +75,61 @@
 **Prevention rule**: ALL DAO queries filtering by `dueDate` MUST use range checks `[dayStart, dayEnd]`. Corollary already in memory/invariants.md I.1 — no change needed. New findability note: "normaliseToMidnight() MUST NOT be called on dueDate in any write path."  
 **Status**: resolved
 
+### FAIL-007 — Hardcoded private machine path in constitution and spec files
+**Date**: 2026-02-28
+**Spec**: cross-cutting (constitution.md, 004-task-ui-scheduling, 005-fix-task-end-time)
+**Phase**: review
+**Symptom**: A private machine path containing a real username was committed into
+  four tracked files: `.specify/memory/constitution.md` (×2),
+  `specs/004-task-ui-scheduling/tasks.md` (×1),
+  `specs/005-fix-task-end-time/quickstart.md` (×1). The path was of the form
+  `C:\Users\<username>\AppData\Local\Android\Sdk\platform-tools\adb.exe`.
+  The username is PII — a direct violation of Constitution Principle VI.
+**Root cause**: When Principle VIII (Device Connectivity Gate) was authored at
+  v1.5.0, a concrete working `$adb` assignment was copied verbatim from a terminal
+  session that used the actual `local.properties` SDK path. Gate 4 (Security) was
+  implicitly understood to apply only to production code, not to documentation code
+  examples in markdown. This conceptual gap allowed the violation to propagate from
+  the constitution into downstream spec files that quoted the same snippet.
+**Fix applied**: (1) Replaced all four hardcoded instances with the portable
+  expression `$adb = if ($env:ANDROID_HOME) { "$env:ANDROID_HOME\platform-tools\adb.exe" } else { "adb" }`.
+  (2) Strengthened Principle VI with an explicit clause covering markdown code blocks.
+  (3) Created `.local/` folder (gitignored) for machine-local env config.
+  (4) Added `.local/` to `.gitignore`. (5) Bumped constitution to v1.6.1.
+**Prevention rule**: Gate 4 Security check now requires scanning all markdown code
+  blocks for private paths. Future Principle VIII examples MUST use `$env:ANDROID_HOME`
+  or the `adb` command from PATH — never a literal `C:\Users\<name>` path.
+**Status**: resolved (see also FAIL-008 for second-pass follow-up)
+
+### FAIL-008 — v1.6.1 remediation itself re-introduced private path PII
+**Date**: 2026-02-28
+**Spec**: cross-cutting (constitution.md, failure-log.md, code-review-result.md)
+**Phase**: review
+**Symptom**: The FAIL-007 remediation (v1.6.1) introduced three new tracked-file
+  violations by quoting the redacted path verbatim in documentary context:
+  (1) constitution.md version change comment; (2) failure-log.md FAIL-007
+  symptom text; (3) code-review-result.md scope and issues table.
+**Root cause**: The previous fix correctly removed the path from functional code
+  examples but did not apply the same rule to documentary text. The author
+  (incorrectly) treated failure logs and change logs as an exception to the
+  no-PII rule. **There is no documentary-context exception.** Quoting a
+  private path in a symptom description commits the PII just as definitively
+  as putting it in a code block.
+**Fix applied**: All three occurrences replaced with the redacted form
+  `C:\Users\<username>\...`. Principle VI updated with an explicit
+  zero-tolerance paragraph and a change-log/failure-log clause.
+  Constitution bumped to v1.6.2. Security scan script added at
+  `.specify/scripts/powershell/security-scan.ps1`. Pre-commit hook
+  template added at `.specify/scripts/powershell/pre-commit.sample`.
+**Prevention rule**: Principle VI (v1.6.2): "Change logs, failure logs, and
+  review documents that describe a past PII violation MUST use the redacted
+  form `C:\Users\<username>\...` — never quote the verbatim path." The
+  security-scan.ps1 script will fail-fast if any real username token appears
+  in any tracked file.
+**Status**: resolved
+
+<!-- Append new failures below this line -->
+
 ### FAIL-004 — INV-20 deviation: `addTask()` stores end-of-day dueDate (23:59 PM)
 **Date**: 2026-03-01  
 **Spec**: 004-task-ui-scheduling US3  
