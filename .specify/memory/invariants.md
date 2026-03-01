@@ -7,7 +7,7 @@
 
 ## I. Data Integrity
 
-1. **Dates are UTC-midnight millis — with one exception for `dueDate`.** Every `Long` stored as a date in Room MUST pass through `normaliseToMidnight()` before insert/update. No raw `System.currentTimeMillis()` for date fields. **Exception (004-task-ui-scheduling, DEC-004)**: `TaskEntity.dueDate` MAY be stored as an end-of-day value (`normaliseToMidnight(t) + 86_399_999` = 23:59:59.999 PM) when supplied by `AddTaskDialog` via `defaultEndTime()`. This is intentional per US3. **Corollary**: ALL DAO queries filtering by `dueDate` MUST use range checks `[dayStart, dayEnd]`, never exact-midnight equality. The legacy `getTasksDueOn()` exact-equality query in `TaskDao` is retained for backward compatibility but MUST NOT be used by new code or the repository.
+1. **Dates are UTC-midnight millis — with exceptions for `dueDate`.** Every `Long` stored as a date in Room MUST pass through `normaliseToMidnight()` before insert/update. No raw `System.currentTimeMillis()` for date fields. **Exceptions for `TaskEntity.dueDate`**: (a) `addTask()` MAY store `dueDate` as end-of-day (`normaliseToMidnight(t) + 86_399_999` = 23:59:59.999 PM) when supplied by `AddTaskDialog` via `defaultEndTime()` — intentional per US3 / DEC-004. (b) `updateTask()` MUST pass `dueDate` verbatim from the caller without normalisation — intentional per FR-001 / DEC-007; the user-selected time must be preserved exactly on edit. **Corollary**: ALL DAO queries filtering by `dueDate` MUST use range checks `[dayStart, dayEnd]`, never exact-midnight equality. The legacy `getTasksDueOn()` exact-equality query in `TaskDao` is retained for backward compatibility but MUST NOT be used by new code or the repository. **Repository Layer Rule (005-fix-task-end-time)**: `normaliseToMidnight()` is permitted only in filtering/grouping contexts (e.g., date range boundaries, history grouping). It MUST NOT be called on `dueDate` or `startDate` in any write path (`addTask`, `updateTask`, or any future write method).
 2. **Completion log is append-only during a day.** A `TaskCompletionLog` row may be deleted only if the parent task is cycled back to TODO on the same calendar day. Cross-day deletions are forbidden.
 3. **No orphan logs.** Deleting a `TaskEntity` must cascade-delete its `TaskCompletionLog` entries.
 
@@ -26,6 +26,7 @@
 
 9. **Green gate.** No feature branch merges if any pre-existing test turns red. New code must include at least one unit test per public repository/ViewModel method.
 10. **No `Thread.sleep` in tests.** Use `advanceUntilIdle()` / `turbine` / Compose test clock.
+11. **Save-path coverage rule (005-fix-task-end-time).** Tests for a bug in a ViewModel or Repository method MUST invoke the actual save-path method (e.g., `saveEditTask()`, `updateTask()`), not a utility/helper function called from that method. A test that only asserts a utility function's output provides no protection against the layer that strips or transforms the value on the way to the DAO. Use MockK slot capture or a Fake repository that records the exact value received.
 
 ## V. Performance
 

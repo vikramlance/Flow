@@ -1,0 +1,105 @@
+<svg viewBox="0 0 360 720" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+
+  <!-- Phone body -->
+  <rect width="360" height="720" rx="40" fill="#1A1A1A" stroke="#3A3A3A" stroke-width="1.5"/>
+  <rect x="-1.5" y="140" width="4" height="50" rx="2" fill="#2A2A2A"/>
+  <rect x="-1.5" y="205" width="4" height="80" rx="2" fill="#2A2A2A"/>
+  <rect x="357.5" y="170" width="4" height="90" rx="2" fill="#2A2A2A"/>
+  <circle cx="180" cy="28" r="6" fill="#111111" stroke="#2A2A2A" stroke-width="1"/>
+  <circle cx="180" cy="28" r="2.5" fill="#1E1E1E"/>
+
+  <!-- Screen background -->
+  <rect x="12" y="48" width="336" height="646" rx="6" fill="#1E1E1E"/>
+
+  <!-- === APP BAR === -->
+  <circle cx="32" cy="77" r="13" fill="#2A2A2A"/>
+  <text x="30" y="82" text-anchor="middle" font-size="14" fill="#00E676">←</text>
+  <text x="180" y="83" text-anchor="middle" font-size="18" font-weight="700" fill="#00E676">History</text>
+  <line x1="12" y1="106" x2="348" y2="106" stroke="#2A2A2A" stroke-width="0.8"/>
+
+  <!-- === FILTER CHIPS === -->
+  <rect x="20" y="114" width="56" height="24" rx="12" fill="#00E676"/>
+  <text x="48" y="130" text-anchor="middle" font-size="10" font-weight="700" fill="#000">All</text>
+
+  <rect x="84" y="114" width="80" height="24" rx="12" fill="#2A2A2A"/>
+  <text x="124" y="130" text-anchor="middle" font-size="10" fill="#888">Recurring</text>
+
+  <rect x="172" y="114" width="76" height="24" rx="12" fill="#2A2A2A"/>
+  <text x="210" y="130" text-anchor="middle" font-size="10" fill="#888">One-off</text>
+
+  <rect x="256" y="114" width="80" height="24" rx="12" fill="#2A2A2A"/>
+  <text x="296" y="130" text-anchor="middle" font-size="10" fill="#888">This Week</text>
+
+  <!-- === DATE GROUP: Feb 28 === -->
+  <text x="22" y="160" font-size="10" fill="#555" letter-spacing="2" font-weight="700">FEB 28, 2026 — TODAY</text>
+
+  <!-- History entry 1 -->
+  <rect x="20" y="168" width="320" height="64" rx="12" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <circle cx="46" cy="200" r="14" fill="#0D1A0D" stroke="#00C853" stroke-width="1.5"/>
+  <text x="46" y="205" text-anchor="middle" font-size="12">✓</text>
+  <text x="70" y="193" font-size="13" font-weight="700" fill="#FFFFFF">Morning Run</text>
+  <text x="70" y="210" font-size="9" fill="#666">Completed at 06:30 · Recurring 🌱</text>
+  <text x="70" y="224" font-size="9" fill="#00E676">Streak continued → 14 days 🔥</text>
+  <!-- Edit icon -->
+  <circle cx="326" cy="200" r="12" fill="#2E2E2E"/>
+  <text x="326" y="205" text-anchor="middle" font-size="10" fill="#888">✏</text>
+
+  <!-- History entry 2 -->
+  <rect x="20" y="240" width="320" height="64" rx="12" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <circle cx="46" cy="272" r="14" fill="#0D1A0D" stroke="#00C853" stroke-width="1.5"/>
+  <text x="46" y="277" text-anchor="middle" font-size="12">✓</text>
+  <text x="70" y="265" font-size="13" font-weight="700" fill="#FFFFFF">Read Book</text>
+  <text x="70" y="282" font-size="9" fill="#666">Completed at 09:45 · Due Feb 28, 09:00</text>
+  <text x="70" y="297" font-size="9" fill="#888">Ahead of schedule</text>
+  <circle cx="326" cy="272" r="12" fill="#2E2E2E"/>
+  <text x="326" y="277" text-anchor="middle" font-size="10" fill="#888">✏</text>
+
+  <!-- === DATE GROUP: Feb 27 === -->
+  <text x="22" y="328" font-size="10" fill="#555" letter-spacing="2" font-weight="700">FEB 27, 2026 — YESTERDAY</text>
+
+  <!-- History entry 3 -->
+  <rect x="20" y="336" width="320" height="64" rx="12" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <circle cx="46" cy="368" r="14" fill="#0D1A0D" stroke="#00C853" stroke-width="1.5"/>
+  <text x="46" y="373" text-anchor="middle" font-size="12">✓</text>
+  <text x="70" y="361" font-size="13" font-weight="700" fill="#FFFFFF">Morning Run</text>
+  <text x="70" y="378" font-size="9" fill="#666">Completed at 07:12 · Recurring 🌱</text>
+  <text x="70" y="393" font-size="9" fill="#00E676">Day 13 of streak</text>
+  <circle cx="326" cy="368" r="12" fill="#2E2E2E"/>
+  <text x="326" y="373" text-anchor="middle" font-size="10" fill="#888">✏</text>
+
+  <!-- History entry 4 -->
+  <rect x="20" y="408" width="320" height="64" rx="12" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <circle cx="46" cy="440" r="14" fill="#0D1A0D" stroke="#00C853" stroke-width="1.5"/>
+  <text x="46" y="445" text-anchor="middle" font-size="12">✓</text>
+  <text x="70" y="433" font-size="13" font-weight="700" fill="#FFFFFF">Weekly Planning</text>
+  <text x="70" y="450" font-size="9" fill="#666">Completed at 10:00 · Due Feb 27, 23:59</text>
+  <text x="70" y="465" font-size="9" fill="#888">On time</text>
+  <circle cx="326" cy="440" r="12" fill="#2E2E2E"/>
+  <text x="326" y="445" text-anchor="middle" font-size="10" fill="#888">✏</text>
+
+  <!-- === DATE GROUP: Feb 25 === -->
+  <text x="22" y="496" font-size="10" fill="#555" letter-spacing="2" font-weight="700">FEB 25, 2026</text>
+
+  <!-- History entry 5 -->
+  <rect x="20" y="504" width="320" height="64" rx="12" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <circle cx="46" cy="536" r="14" fill="#0D1A0D" stroke="#00C853" stroke-width="1.5"/>
+  <text x="46" y="541" text-anchor="middle" font-size="12">✓</text>
+  <text x="70" y="529" font-size="13" font-weight="700" fill="#FFFFFF">Design System Review</text>
+  <text x="70" y="546" font-size="9" fill="#666">Completed at 15:30 · Due Feb 25, 22:00</text>
+  <text x="70" y="561" font-size="9" fill="#7B7FFF">Target time preserved ✓</text>
+  <circle cx="326" cy="536" r="12" fill="#2E2E2E"/>
+  <text x="326" y="541" text-anchor="middle" font-size="10" fill="#888">✏</text>
+
+  <!-- History entry 6 -->
+  <rect x="20" y="576" width="320" height="64" rx="12" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <circle cx="46" cy="608" r="14" fill="#0D1A0D" stroke="#00C853" stroke-width="1.5"/>
+  <text x="46" y="613" text-anchor="middle" font-size="12">✓</text>
+  <text x="70" y="601" font-size="13" font-weight="700" fill="#FFFFFF">Morning Run</text>
+  <text x="70" y="618" font-size="9" fill="#666">Completed at 06:55 · Recurring 🌱</text>
+  <text x="70" y="633" font-size="9" fill="#00E676">Day 11 of streak</text>
+  <circle cx="326" cy="608" r="12" fill="#2E2E2E"/>
+  <text x="326" y="613" text-anchor="middle" font-size="10" fill="#888">✏</text>
+
+  <!-- Home indicator -->
+  <rect x="130" y="704" width="100" height="4" rx="2" fill="#444"/>
+</svg>

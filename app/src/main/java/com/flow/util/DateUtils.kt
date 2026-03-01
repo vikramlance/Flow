@@ -87,3 +87,32 @@ internal fun mergeDateTime(datePart: Long, timePart: Long): Long {
         set(Calendar.MILLISECOND,  0)
     }.timeInMillis
 }
+
+/**
+ * T004 — Returns epoch millis for [newUtcDateMillis]'s calendar date at the
+ * hour/minute of [existingDueMillis], zeroing SECOND and MILLISECOND.
+ *
+ * Used in [TaskEditSheet] (History screen) due-date picker confirm so that
+ * picking a new calendar date preserves the task's existing end time instead
+ * of resetting it to midnight (00:00).
+ *
+ * If [existingDueMillis] is null (task had no due-date), defaults to 23:59.
+ *
+ * @param newUtcDateMillis  UTC-midnight millis from [DatePickerState.selectedDateMillis].
+ * @param existingDueMillis The task's current [TaskEntity.dueDate], or null if absent.
+ * @return Epoch millis on the newly-selected calendar date at the task's existing time-of-day.
+ */
+internal fun resolveEditTaskSheetDueDate(
+    newUtcDateMillis: Long,
+    existingDueMillis: Long?,
+): Long {
+    val base = mergeDateTime(
+        datePart = utcDateToLocalMidnight(newUtcDateMillis),
+        timePart = existingDueMillis ?: defaultEndTime(),
+    )
+    return Calendar.getInstance().apply {
+        timeInMillis = base
+        set(Calendar.SECOND,      0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}

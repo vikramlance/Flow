@@ -54,6 +54,27 @@
 
 <!-- Append new failures below this line -->
 
+### FAIL-005 — Iteration 1 fix targeted wrong layer (UI instead of Repository)
+**Date**: 2026-03-10  
+**Spec**: 005-fix-task-end-time FR-001  
+**Phase**: code / test  
+**Symptom**: Editing a task's end date saved 12:00 AM (midnight) instead of the user-selected time. Iteration 1 added `mergeDateTime()` helpers at the UI date-picker confirm lambdas in `GlobalHistoryScreen.kt` and wrote 18 Compose utility tests that all passed — yet the bug persisted on device.  
+**Root cause**: Two upstream save-path locations both called `normaliseToMidnight(dueDate)` unconditionally, overwriting any time component supplied by the UI: (1) `GlobalHistoryViewModel.saveEditTask` line 126, (2) `TaskRepositoryImpl.updateTask` line 151. The iteration 1 tests exercised utility functions (`mergeDateTime`, `resolveEditTaskSheetDueDate`) directly; none invoked the actual ViewModel or Repository save path — so the stripping was invisible to the test suite.  
+**Fix applied**: T004/T005 created RED tests that invoke the real save-path layers and capture the DAO call via MockK slot. T006 removed `dueDate = updated.dueDate?.let { normaliseToMidnight(it) }` from `GlobalHistoryViewModel.saveEditTask`. T007 removed `dueDate = task.dueDate?.let { normaliseToMidnight(it) }` from `TaskRepositoryImpl.updateTask`. T004/T005 turned GREEN. Full instrumented suite: 78 tests, 0 failures.  
+**Prevention rule**: Two new constitution rules added: "Repository Layer Rules" (normaliseToMidnight is only for filtering/grouping, never for storage in updateTask) and "Test Coverage Rules" (tests for a bug fix must invoke the actual save path at the root-cause layer, not utility helpers). Documented findings in memory/architecture.md and memory/invariants.md.  
+**Status**: resolved  
+
+### FAIL-006 — INV-20 / CON-C01 deviation: `updateTask()` no longer normalises dueDate
+**Date**: 2026-03-10  
+**Spec**: 005-fix-task-end-time FR-001  
+**Phase**: code  
+**Symptom**: After T007, `TaskRepositoryImpl.updateTask()` passes `dueDate` verbatim to the DAO. This violates INV-20 ("UTC-midnight-aligned millis") and the literal text of CON-C01 ("all date Longs pass through normaliseToMidnight()").  
+**Root cause**: The fix is intentional — FR-001 requires exact user-selected dueDate/time to be preserved. `normaliseToMidnight()` in the Repository save path was the bug. The invariant text was written before this requirement existed.  
+**Impact**: No runtime failure. `getTodayProgress()` uses `getTasksDueInRange(dayStart, dayEnd)` (DEC-005) which covers any time-of-day dueDate value. Tasks edited after this fix will have a dueDate with a non-midnight time component; queries are unaffected.  
+**Fix applied**: INV-20 relaxed in memory/invariants.md to extend the exception to cover values stored by `updateTask()`. DEC-007 added to decisions.md. CON-C01 exception noted — the only remaining caller of `normaliseToMidnight()` for dueDate is `addTask()` (and it is not called there either since DEC-004).  
+**Prevention rule**: ALL DAO queries filtering by `dueDate` MUST use range checks `[dayStart, dayEnd]`. Corollary already in memory/invariants.md I.1 — no change needed. New findability note: "normaliseToMidnight() MUST NOT be called on dueDate in any write path."  
+**Status**: resolved
+
 ### FAIL-004 — INV-20 deviation: `addTask()` stores end-of-day dueDate (23:59 PM)
 **Date**: 2026-03-01  
 **Spec**: 004-task-ui-scheduling US3  

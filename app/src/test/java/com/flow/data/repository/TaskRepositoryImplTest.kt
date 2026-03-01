@@ -363,4 +363,60 @@ class TaskRepositoryImplTest {
 
         assertEquals("Total should be 1 (recurring task ending at 23:59)", 1, progress.totalToday)
         assertEquals("Completed should be 1", 1, progress.completedToday)
-    }}
+    }
+
+    // ── T005 [RED] / FR-001 / US1: updateTask must not normalise dueDate ──────
+
+    /**
+     * T005 [RED] — updateTask_preservesDueDateTimeExact
+     *
+     * FR-001: TaskRepositoryImpl.updateTask MUST NOT normalise dueDate to midnight.
+     * The DAO must receive exactly the dueDate the caller passed.
+     *
+     * This test MUST FAIL before T007 because the real TaskRepositoryImpl calls
+     * `task.dueDate?.let { normaliseToMidnight(it) }` before invoking taskDao.updateTask,
+     * stripping H=15 M=30 to 00:00.
+     *
+     * After T007 (removing the normaliseToMidnight call), this test MUST PASS.
+     */
+    @Test
+    fun updateTask_preservesDueDateTimeExact() = runTest {
+        // Arrange: dueDate at H=15 M=30
+        val dueDateH15M30 = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 15)
+            set(Calendar.MINUTE, 30)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val task = TaskEntity(
+            id        = 99L,
+            title     = "Timed Task",
+            status    = TaskStatus.IN_PROGRESS,
+            dueDate   = dueDateH15M30,
+            startDate = System.currentTimeMillis()
+        )
+
+        // Stub getTaskById so updateTask can look up the existing record
+        coEvery { taskDao.getTaskById(99L) } returns task
+
+        // Capture what updateTask passes to the DAO
+        val capturedTask = slot<TaskEntity>()
+        coEvery { taskDao.updateTask(capture(capturedTask)) } returns Unit
+
+        // Act
+        repository.updateTask(task)
+
+        // Assert: DAO must receive dueDate with H=15 M=30 intact
+        val captured = capturedTask.captured
+        val cal = Calendar.getInstance().apply { timeInMillis = captured.dueDate!! }
+        assertEquals(
+            "T005 FR-001: updateTask must pass HOUR_OF_DAY=15 to DAO (was ${cal.get(Calendar.HOUR_OF_DAY)})",
+            15, cal.get(Calendar.HOUR_OF_DAY)
+        )
+        assertEquals(
+            "T005 FR-001: updateTask must pass MINUTE=30 to DAO (was ${cal.get(Calendar.MINUTE)})",
+            30, cal.get(Calendar.MINUTE)
+        )
+    }
+}
