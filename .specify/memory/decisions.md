@@ -45,6 +45,30 @@
 
 <!-- Append new decisions below this line -->
 
+### DEC-007 — Remove `normaliseToMidnight()` from `updateTask()` and `saveEditTask()`
+**Date**: 2026-03-10  
+**Context**: FR-001 (005-fix-task-end-time) requires that editing a task's due date preserves the user-selected time exactly. Both `TaskRepositoryImpl.updateTask()` and `GlobalHistoryViewModel.saveEditTask()` unconditionally called `normaliseToMidnight(dueDate)`, silently stripping hours/minutes on every update.  
+**Decision**: Remove both `normaliseToMidnight` calls from the write paths. `dueDate` is passed verbatim from the ViewModel through the Repository to the DAO. `normaliseToMidnight()` is now restricted to filtering/grouping operations only (e.g., history grouping, range-query boundary computation) — never for storage.  
+**Rejected alternatives**: (a) Keep normalisation and represent time-of-day separately as a `dueTime: Long?` field — beyond spec scope; schema migration required. (b) Apply normalisation conditionally if no time was explicitly set — introduces ambiguity about what "no time set" means in millis.  
+**Affected invariants**: INV-20 relaxed (see FAIL-006). CON-C01 exception noted. All `dueDate`-filtering queries must continue to use `[dayStart, dayEnd]` range checks per DEC-005.  
+**Spec ref**: 005-fix-task-end-time FR-001, FR-007, FR-008 / T006, T007  
+
+### DEC-008 — MockK DAO slot capture for Repository-layer RED test (T005)
+**Date**: 2026-03-10  
+**Context**: T005 needed to verify that `TaskRepositoryImpl.updateTask()` passes `dueDate` verbatim to the DAO without stripping time components. Two options considered: (a) MockK spy on `TaskDao` with slot capture; (b) in-memory Room DB with the full DAO.  
+**Decision**: Use MockK `slot<TaskEntity>()` to capture the argument passed to `taskDao.updateTask()`. Keeps T005 a pure JVM unit test (fast, no emulator needed). The slot captures the exact entity passed to the DAO layer, making the assertion `entity.dueDate == expectedDueDateMillis` exact and reliable.  
+**Rejected alternatives**: In-memory Room DB — heavier setup, moves test to instrumented tier; adds emulator dependency for what is a pure logic assertion. Turbine / flow testing — not needed; `updateTask` is a suspend write, not a Flow.  
+**Affected invariants**: CON-X03 N/A (not a Room query test; no DB needed). CON-X01 satisfied.  
+**Spec ref**: 005-fix-task-end-time / T005  
+
+### DEC-009 — `TaskEditSheet` visibility changed from `private` to `internal`
+**Date**: 2026-03-10  
+**Context**: T009 needed to invoke `TaskEditSheet` from `GlobalHistoryScreenTest.kt` (instrumented Compose test in the same module). The composable was declared `private` in `GlobalHistoryScreen.kt`, making it inaccessible from the test file.  
+**Decision**: Change `private fun TaskEditSheet(…)` to `internal fun TaskEditSheet(…)`. This is the minimum visibility change needed; `internal` ensures the function is still module-scoped and not part of the public API. The `@OptIn(ExperimentalMaterial3Api::class)` annotation was also required and added.  
+**Rejected alternatives**: Move `TaskEditSheet` to a separate file with default (public) visibility — unnecessary API surface expansion. Use a test-only wrapper composable — unnecessary indirection.  
+**Affected invariants**: None. No public API change; `internal` stays within `:app` module.  
+**Spec ref**: 005-fix-task-end-time / T009, T010–T014
+
 ### DEC-004 — `addTask()` no longer normalises dueDate
 **Date**: 2026-03-01  
 **Context**: US3 requires the AddTaskDialog to display and store an end-of-day default (11:59 PM). Previously addTask() called normaliseToMidnight() forcing all dueDates to midnight, which was correct for equality-based DAO queries but incompatible with the new UX requirement.  

@@ -26,10 +26,15 @@ import com.flow.data.local.TaskStatus
 import com.flow.ui.theme.NeonGreen
 import com.flow.ui.theme.SurfaceDark
 import com.flow.ui.theme.TaskInProgress
+import com.flow.util.mergeDateTime
+import com.flow.util.resolveEditTaskSheetDueDate
 import com.flow.util.utcDateToLocalMidnight
+import com.flow.util.defaultEndTime
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import androidx.compose.ui.window.Dialog
 
 /**
  * T013 — Global History Screen (US2 P2).
@@ -491,7 +496,7 @@ private fun HistoryEditDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TaskEditSheet(
+internal fun TaskEditSheet(
     task: TaskEntity,
     onSave: (TaskEntity) -> Unit,
     onDismiss: () -> Unit
@@ -503,6 +508,8 @@ private fun TaskEditSheet(
 
     var showStartDatePicker by remember { mutableStateOf(false) }
     var showDueDatePicker   by remember { mutableStateOf(false) }
+    var showStartTimePicker by remember { mutableStateOf(false) }
+    var showDueTimePicker   by remember { mutableStateOf(false) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SurfaceDark) {
         Column(
@@ -529,7 +536,7 @@ private fun TaskEditSheet(
             )
 
             // Start date
-            val startFmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+            val startFmt = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
             OutlinedButton(
                 onClick = { showStartDatePicker = true },
                 border = BorderStroke(1.dp, Color.Gray),
@@ -588,7 +595,7 @@ private fun TaskEditSheet(
         }
     }
 
-    // Start date picker
+    // Start date picker — chains to start-time picker on confirm
     if (showStartDatePicker) {
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = startDateMs)
         DatePickerDialog(
@@ -596,10 +603,11 @@ private fun TaskEditSheet(
             confirmButton = {
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let {
-                        startDateMs = utcDateToLocalMidnight(it)
+                        startDateMs = mergeDateTime(utcDateToLocalMidnight(it), startDateMs)
                         showStartDatePicker = false
+                        showStartTimePicker = true
                     }
-                }) { Text("OK", color = NeonGreen) }
+                }) { Text("Next", color = NeonGreen) }
             },
             dismissButton = { TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel", color = Color.Gray) } },
             colors = DatePickerDefaults.colors(containerColor = SurfaceDark)
@@ -614,7 +622,39 @@ private fun TaskEditSheet(
         }
     }
 
-    // Due date picker
+    // Start-time picker
+    if (showStartTimePicker) {
+        val cal = Calendar.getInstance().apply { timeInMillis = startDateMs }
+        val timePickerState = rememberTimePickerState(
+            initialHour   = cal.get(Calendar.HOUR_OF_DAY),
+            initialMinute = cal.get(Calendar.MINUTE)
+        )
+        Dialog(onDismissRequest = { showStartTimePicker = false }) {
+            Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark)) {
+                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Select Start Time", color = NeonGreen, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TimePicker(state = timePickerState)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showStartTimePicker = false }) { Text("Cancel", color = Color.Gray) }
+                        TextButton(onClick = {
+                            val updated = Calendar.getInstance().apply {
+                                timeInMillis = startDateMs
+                                set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                                set(Calendar.MINUTE,       timePickerState.minute)
+                                set(Calendar.SECOND,       0)
+                                set(Calendar.MILLISECOND,  0)
+                            }
+                            startDateMs = updated.timeInMillis
+                            showStartTimePicker = false
+                        }) { Text("Confirm", color = NeonGreen) }
+                    }
+                }
+            }
+        }
+    }
+
+    // Due date picker — chains to due-time picker on confirm
     if (showDueDatePicker) {
         val pickerState = rememberDatePickerState(initialSelectedDateMillis = dueDateMs ?: System.currentTimeMillis())
         DatePickerDialog(
@@ -622,10 +662,11 @@ private fun TaskEditSheet(
             confirmButton = {
                 TextButton(onClick = {
                     pickerState.selectedDateMillis?.let {
-                        dueDateMs = utcDateToLocalMidnight(it)
+                        dueDateMs = resolveEditTaskSheetDueDate(it, dueDateMs)
                         showDueDatePicker = false
+                        showDueTimePicker = true
                     }
-                }) { Text("OK", color = NeonGreen) }
+                }) { Text("Next", color = NeonGreen) }
             },
             dismissButton = {
                 Column {
@@ -642,6 +683,39 @@ private fun TaskEditSheet(
                 selectedDayContentColor = Color.Black, todayContentColor = NeonGreen,
                 todayDateBorderColor = NeonGreen
             ))
+        }
+    }
+
+    // Due-time picker
+    if (showDueTimePicker) {
+        val initMs = dueDateMs ?: defaultEndTime()
+        val cal = Calendar.getInstance().apply { timeInMillis = initMs }
+        val timePickerState = rememberTimePickerState(
+            initialHour   = cal.get(Calendar.HOUR_OF_DAY),
+            initialMinute = cal.get(Calendar.MINUTE)
+        )
+        Dialog(onDismissRequest = { showDueTimePicker = false }) {
+            Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark)) {
+                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Select Target Time", color = NeonGreen, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TimePicker(state = timePickerState)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showDueTimePicker = false }) { Text("Cancel", color = Color.Gray) }
+                        TextButton(onClick = {
+                            val updated = Calendar.getInstance().apply {
+                                timeInMillis = dueDateMs ?: defaultEndTime()
+                                set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                                set(Calendar.MINUTE,       timePickerState.minute)
+                                set(Calendar.SECOND,       0)
+                                set(Calendar.MILLISECOND,  0)
+                            }
+                            dueDateMs = updated.timeInMillis
+                            showDueTimePicker = false
+                        }) { Text("Confirm", color = NeonGreen) }
+                    }
+                }
+            }
         }
     }
 }

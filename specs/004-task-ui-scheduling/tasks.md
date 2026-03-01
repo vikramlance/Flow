@@ -39,7 +39,8 @@
 
 > **⛔ Device Gate (Constitution VIII — mandatory before T007)**: Run the ADB preflight check first:
 > ```powershell
-> $adb = "C:\Users\vikra\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+> # Uses ANDROID_HOME env var (set in .local/env.ps1) or falls back to PATH.
+> $adb = if ($env:ANDROID_HOME) { "$env:ANDROID_HOME\platform-tools\adb.exe" } else { "adb" }
 > $devices = & $adb devices 2>&1 | Where-Object { $_ -match "\bdevice\b" -and $_ -notmatch "^List" }
 > if (-not $devices) { Write-Host "No device found. Connect device (USB debugging on) or start AVD in Android Studio → Device Manager → ▶, then re-run."; exit 1 }
 > Write-Host "Device found: $devices"

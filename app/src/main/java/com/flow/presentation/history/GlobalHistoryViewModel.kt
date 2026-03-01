@@ -112,7 +112,7 @@ class GlobalHistoryViewModel @Inject constructor(
      * (a) If the new status is not COMPLETED, clear completionTimestamp so the task
      *     disappears from [getCompletedNonRecurringTasks()].
      * (b) Calls repository.updateTaskStatus() to handle completionTimestamp side-effects,
-     *     then repository.updateTask() (which normalises dueDate internally).
+     *     then repository.updateTask() which persists dueDate exactly as received (FR-001).
      */
     fun saveEditTask(updated: TaskEntity) {
         viewModelScope.launch {
@@ -122,8 +122,7 @@ class GlobalHistoryViewModel @Inject constructor(
             // completionTimestamp that updateTaskStatus just set/cleared
             repository.updateTask(
                 updated.copy(
-                    completionTimestamp = if (updated.status == TaskStatus.COMPLETED) updated.completionTimestamp else null,
-                    dueDate = updated.dueDate?.let { normaliseToMidnight(it) }
+                    completionTimestamp = if (updated.status == TaskStatus.COMPLETED) updated.completionTimestamp else null
                 )
             )
             _uiState.update { it.copy(editingTask = null) }

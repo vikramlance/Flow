@@ -64,7 +64,7 @@ For each of the 9 Constitution Principles, verify:
 | III. Layered Architecture | Does code respect layer boundaries (UI→VM→Repo→DAO)? | PASS / FAIL |
 | IV. State-Driven UI | Is UI state modelled explicitly? Loading/empty/error handled? | PASS / FAIL |
 | V. Explicit Dependencies | Constructor injection used? No service locator patterns? | PASS / FAIL |
-| VI. Security & Privacy | No secrets, no PII, parameterized queries, no cleartext? | PASS / FAIL |
+| VI. Security & Privacy | No secrets, no PII in any tracked file — **including markdown code blocks**? (grep all `.md` changes for `C:\Users\`, `/Users/`, `AppData\`) Parameterized queries, no cleartext? | PASS / FAIL |
 | VII. Emoji Non-Negotiable | All emoji use `\uXXXX` escapes? Rendering test exists? | PASS / FAIL / N/A |
 | VIII. Device Gate | Connected-device tasks ran `adb devices` first? | PASS / FAIL / N/A |
 | IX. Minimal Precise | No dead code, no over-engineering, single responsibility? | PASS / FAIL |
@@ -250,8 +250,9 @@ Select the 5 most relevant scenarios from `eval/scenarios.md` for this change an
 
 - [ ] No output/log files at repo root (should be in `logs/`).
 - [ ] No temporary scripts at repo root (should be in `.specify/scripts/backup/`).
-- [ ] No secrets or PII in committed files.
-- [ ] `.gitignore` covers all generated file patterns.
+- [ ] No secrets or PII in committed files — run: `git grep -n "C:\\Users\\\|/Users/\|AppData\\" -- "*.md" "*.kt" "*.kts" "*.xml" "*.ps1"` and verify zero matches.
+- [ ] No private machine paths in any markdown fenced code blocks.
+- [ ] `.gitignore` covers all generated file patterns, including `.local/env.ps1`.
 
 ---
 

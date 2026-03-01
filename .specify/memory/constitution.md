@@ -29,6 +29,23 @@ Sync Impact Report
   making red-green discipline MANDATORY for ALL code changes (not only bug fixes),
   including requirement to run full test suite after every task; updated
   plan-template.md and tasks-template.md with TDD enforcement; 2026-02-27)
+- Version change: 1.6.0 → 1.6.1 (PATCH: removed hardcoded private machine path
+  `C:\Users\<username>\...\platform-tools\adb.exe` from all 4 tracked files
+  (constitution.md ×2, 004 tasks.md ×1, 005 quickstart.md ×1); replaced with
+  portable `$env:ANDROID_HOME` resolution; strengthened Principle VI with explicit
+  clause covering code examples and documentation snippets in markdown; strengthened
+  Gate 4 Security check to require scanning all markdown code blocks; created
+  `.local/` folder (gitignored) for machine-local env config; added `.local/` to
+  `.gitignore`; logged as FAIL-007 in failure-log.md; 2026-02-28)
+- Version change: 1.6.1 → 1.6.2 (PATCH: second-pass removal — the v1.6.1 fix itself
+  inadvertently quoted the redacted private path verbatim in three places: constitution
+  version comment, failure-log.md FAIL-007 symptom text, and code-review-result.md;
+  all occurrences replaced with `C:\Users\<username>\...` redaction; strengthened
+  Principle VI with absolute zero-tolerance clause — actual usernames and machine-
+  specific path tokens MUST NOT appear anywhere in any tracked file regardless of
+  context (change logs, failure logs, review comments); added FAIL-008 to failure-log;
+  added `.specify/scripts/powershell/security-scan.ps1` enforcement script; added
+  `.git/hooks/pre-commit` template; bumped version footer; 2026-02-28)
 - Principles established:
   - I. Additive Logic (Non-Regression) ⚑ HIGHEST NON-NEGOTIABLE
   - II. Data Integrity (Single Source of Truth)
@@ -176,6 +193,15 @@ information, and MUST NOT introduce security vulnerabilities.
 
 **No secrets or personal data in tracked files**
 
+⛔ **ZERO TOLERANCE — NO EXCEPTIONS**: A real username, machine-specific
+tokens, or private path segment MUST NOT appear verbatim in any tracked
+file under any circumstances — not in production code, not in markdown
+prose, not in fenced code blocks, not in change log comments, not in
+failure log symptom descriptions, not in review result documents, not
+anywhere. There is no "documentary context" exception. If a violation
+must be described, use a redacted placeholder such as
+`C:\Users\<username>\...` — never the actual username or path segment.
+
 - Credentials (passwords, API keys, tokens, signing key
   passphrases) MUST NEVER appear in any source-controlled file
   — not in comments, constants, log statements, or test
@@ -184,11 +210,34 @@ information, and MUST NOT introduce security vulnerabilities.
   `C:\Users\<name>`, device serials, email addresses, real
   names) MUST NOT appear in any tracked file (`.kt`, `.xml`,
   `.pro`, `.md`, `.gradle`, `.kts`, `.toml`, `.properties`).
+- **Code examples and documentation snippets in markdown files
+  are subject to the same no-PII rules as production source
+  code.** A private path in a fenced code block in a `.md` file
+  is just as much a violation as one in a `.kt` file. Before
+  writing any code example that invokes an external tool (e.g.,
+  `adb`, `gradle`, `sdkmanager`), use environment variables
+  (`$env:ANDROID_HOME`, `$env:JAVA_HOME`) or unqualified
+  command names resolvable from PATH — never a literal
+  `C:\Users\<name>` path.
+- **Change logs, failure logs, and review documents** that
+  describe a past PII violation MUST use the redacted form
+  `C:\Users\<username>\...` — never quote the verbatim path
+  that was redacted. Describing the violation does not
+  constitute permission to re-introduce the violation.
+- Machine-local configuration (SDK paths, signing credentials,
+  personal tool locations) MUST be stored in `.local/` which is
+  gitignored. Copy `.local/env.ps1.template` to `.local/env.ps1`
+  and set values there; never inline them in tracked files.
+- **Automated enforcement**: Run `.specify/scripts/powershell/security-scan.ps1`
+  before every commit and as part of every code review. This
+  script exits non-zero if any real username or absolute private
+  path is detected in tracked files.
 - All sensitive file patterns MUST be present in `.gitignore`
   before the first commit. At minimum this covers:
   `local.properties`, `.idea/`, `*.jks`, `*.keystore`,
   `keystore.properties`, `google-services.json`, `.env`,
-  `signing.properties`, and any `build_log*.txt` output files.
+  `signing.properties`, `.local/`, and any `build_log*.txt`
+  output files.
 - If a secret is accidentally committed, it MUST be treated as
   compromised immediately: rotate the credential, then purge it
   from history (git-filter-repo or BFG) before pushing.
@@ -263,7 +312,9 @@ reachable via ADB.
 `connectedDebugAndroidTest` or Tier 3 E2E invocation):
 
 ```powershell
-$adb = "C:\Users\vikra\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+# Resolve ADB without hardcoding private paths (Constitution VI).
+# Uses ANDROID_HOME env var (set in .local/env.ps1) or falls back to PATH.
+$adb = if ($env:ANDROID_HOME) { "$env:ANDROID_HOME\platform-tools\adb.exe" } else { "adb" }
 $devices = & $adb devices 2>&1 | Where-Object { $_ -match "\bdevice\b" -and $_ -notmatch "^List" }
 if (-not $devices) {
     Write-Host "⚠ No Android device detected."
@@ -377,11 +428,17 @@ specification, planning, and code review:
    boundaries (UI → VM → repository → storage) and uses
    consistent state modelling (single state object per screen).
 4. **Security gate** — Confirm: (a) no personal information or
-   credentials are introduced into tracked files; (b)
-   `.gitignore` covers all new sensitive file types produced by
-   the change; (c) new code uses parameterized queries, HTTPS,
-   and suppresses sensitive log output in production; (d) any
-   new third-party dependency has been checked for known CVEs.
+   credentials are introduced into tracked files — this includes
+   fenced code blocks in `.md` files (grep all markdown files
+   for `C:\Users\`, `/Users/`, `/home/`, `AppData\`, and any
+   absolute path containing a username); (b) `.gitignore` covers
+   all new sensitive file types produced by the change —
+   including `.local/`; (c) new code uses parameterized queries,
+   HTTPS, and suppresses sensitive log output in production; (d)
+   any new third-party dependency has been checked for known
+   CVEs; (e) any new tool invocation example uses
+   `$env:ANDROID_HOME`, `$env:JAVA_HOME`, or unqualified PATH
+   commands — never a literal machine-specific path.
 
 5. **Testing gate** — Confirm every layer of the test pyramid is
    covered for the change:
@@ -510,7 +567,9 @@ wait — never skip or substitute with manual steps.
 `connectedDebugAndroidTest` invocation):
 
 ```powershell
-$adb = "C:\Users\vikra\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+# Resolve ADB without hardcoding private paths (Constitution VI).
+# Uses ANDROID_HOME env var (set in .local/env.ps1) or falls back to PATH.
+$adb = if ($env:ANDROID_HOME) { "$env:ANDROID_HOME\platform-tools\adb.exe" } else { "adb" }
 $maxWaitSeconds = 300  # 5 minutes
 $pollInterval   = 10   # seconds
 $elapsed        = 0
@@ -757,4 +816,4 @@ document MUST be corrected.
 - Code reviews MUST verify Additive Logic, Data Integrity,
   and Consistency gates before approval.
 
-**Version**: 1.6.0 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-27
+**Version**: 1.6.2 | **Ratified**: 2026-02-20 | **Last Amended**: 2026-02-28

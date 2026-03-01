@@ -516,7 +516,14 @@ fun TaskItem(
                      color = if (isCompleted) contentColor else Color.Gray
                  )
              }
-             
+
+             // T017/US3/FR-005: Start date and time always visible on task card
+             Text(
+                 text = "Start: ${SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date(task.startDate))}",
+                 style = MaterialTheme.typography.labelSmall,
+                 color = if (isCompleted) contentColor else Color.Gray
+             )
+
              if (task.dueDate != null && !isCompleted) {
                  val diff = task.dueDate - System.currentTimeMillis()
                  val daysLeft = diff / (1000 * 3600 * 24)
@@ -704,7 +711,9 @@ fun AddTaskDialog(
                             val cal = Calendar.getInstance().apply {
                                 timeInMillis = startDate
                                 set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                                set(Calendar.MINUTE, timePickerState.minute)
+                                set(Calendar.MINUTE,       timePickerState.minute)
+                                set(Calendar.SECOND,       0)
+                                set(Calendar.MILLISECOND,  0)
                             }
                             startDate = cal.timeInMillis
                             showStartTimePicker = false
@@ -751,7 +760,9 @@ fun AddTaskDialog(
                             val cal = Calendar.getInstance().apply {
                                 timeInMillis = dueDate ?: dialogOpenTime
                                 set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                                set(Calendar.MINUTE, timePickerState.minute)
+                                set(Calendar.MINUTE,       timePickerState.minute)
+                                set(Calendar.SECOND,       0)
+                                set(Calendar.MILLISECOND,  0)
                             }
                             dueDate = cal.timeInMillis
                             showTargetTimePicker = false
@@ -961,7 +972,7 @@ fun EditTaskDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        startDate = utcDateToLocalMidnight(it)
+                        startDate = mergeDateTime(utcDateToLocalMidnight(it), startDate)
                         showStartDatePicker = false
                         showStartTimePicker = true
                     }
@@ -990,7 +1001,9 @@ fun EditTaskDialog(
                             val cal = Calendar.getInstance().apply {
                                 timeInMillis = startDate
                                 set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                                set(Calendar.MINUTE, timePickerState.minute)
+                                set(Calendar.MINUTE,       timePickerState.minute)
+                                set(Calendar.SECOND,       0)
+                                set(Calendar.MILLISECOND,  0)
                             }
                             startDate = cal.timeInMillis
                             showStartTimePicker = false
@@ -1008,7 +1021,7 @@ fun EditTaskDialog(
             confirmButton = {
                 TextButton(onClick = {
                     datePickerState.selectedDateMillis?.let { 
-                        dueDate = endTimeForDate(utcDateToLocalMidnight(it))
+                        dueDate = mergeDateTime(utcDateToLocalMidnight(it), dueDate ?: defaultEndTime())
                         showTargetDatePicker = false
                         showTargetTimePicker = true
                     }
@@ -1037,7 +1050,9 @@ fun EditTaskDialog(
                             val cal = Calendar.getInstance().apply {
                                 timeInMillis = dueDate ?: currentMillis
                                 set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                                set(Calendar.MINUTE, timePickerState.minute)
+                                set(Calendar.MINUTE,       timePickerState.minute)
+                                set(Calendar.SECOND,       0)
+                                set(Calendar.MILLISECOND,  0)
                             }
                             dueDate = cal.timeInMillis
                             showTargetTimePicker = false

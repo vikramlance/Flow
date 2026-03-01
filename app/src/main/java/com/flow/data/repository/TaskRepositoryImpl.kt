@@ -147,8 +147,7 @@ class TaskRepositoryImpl @Inject constructor(
             null
         taskDao.updateTask(
             task.copy(
-                completionTimestamp = resolvedTimestamp,
-                dueDate             = task.dueDate?.let { normaliseToMidnight(it) }
+                completionTimestamp = resolvedTimestamp
             )
         )
     }

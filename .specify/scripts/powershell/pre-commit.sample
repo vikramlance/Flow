@@ -1,0 +1,39 @@
+#!/bin/sh
+# .specify/scripts/powershell/pre-commit.sample
+# ─────────────────────────────────────────────────────────────────────────────
+# Git pre-commit hook: blocks commits that contain private machine paths or PII.
+#
+# INSTALL:
+#   Copy this file to .git/hooks/pre-commit and make it executable:
+#
+#   Windows (PowerShell):
+#     Copy-Item .specify\scripts\powershell\pre-commit.sample .git\hooks\pre-commit
+#
+#   macOS / Linux:
+#     cp .specify/scripts/powershell/pre-commit.sample .git/hooks/pre-commit
+#     chmod +x .git/hooks/pre-commit
+#
+# The hook runs security-scan.ps1 before every `git commit`.
+# If any private path is found the commit is BLOCKED with an explanation.
+# ─────────────────────────────────────────────────────────────────────────────
+
+if command -v pwsh > /dev/null 2>&1; then
+    PWSH=pwsh
+elif command -v powershell > /dev/null 2>&1; then
+    PWSH=powershell
+else
+    echo "WARNING: PowerShell not found — skipping security scan pre-commit hook."
+    exit 0
+fi
+
+$PWSH -NoProfile -ExecutionPolicy Bypass \
+    -File ".specify/scripts/powershell/security-scan.ps1"
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "COMMIT BLOCKED: Security scan detected private paths or PII."
+    echo "Fix the violations listed above, then retry your commit."
+    exit 1
+fi
+
+exit 0

@@ -41,9 +41,8 @@ Composable → ViewModel (StateFlow) → Repository (suspend / Flow) → DAO →
 ### Date/Time
 
 - All persisted dates (except `dueDate` — see below) are **UTC milliseconds normalised to midnight** (`normaliseToMidnight()`).
-- **`dueDate` exception**: Tasks created via `AddTaskDialog` store `dueDate` as end-of-day (23:59:59.999 PM = `midnight + 86_399_999`), per US3/DEC-004. Recurring tasks refresh to 12:01 AM / 11:59 PM independently.
+- **`dueDate` write-path rules (DEC-004, DEC-007)**: `addTask()` stores `dueDate` as end-of-day (23:59:59.999 PM = `midnight + 86_399_999`) when supplied by `AddTaskDialog` via `defaultEndTime()`. `updateTask()` passes `dueDate` verbatim — no normalisation — preserving the user-selected time exactly (FR-001 / 005-fix-task-end-time). `normaliseToMidnight()` is restricted to filtering/grouping contexts only; it MUST NOT be called in any write path. Recurring tasks refresh to 12:01 AM / 11:59 PM independently.
 - All DAO queries filtering by `dueDate` use inclusive range checks `[dayStart, dayEnd]`, **never** exact-midnight equality. The legacy `getTasksDueOn()` exact-equality DAO method exists but is not called by the repository.
-- `updateTask()` normalises `dueDate` back to midnight on edit — this is a known inconsistency (FAIL-004) with no functional impact since range queries cover both midnight and end-of-day values on the same calendar day.
 - Display formatting converts to device locale timezone.
 - `DateUtils.kt` is the single source for date math.
 
@@ -62,6 +61,7 @@ TODO → In Progress → Completed → (tap again) → TODO
 - **Unit**: JUnit4 + kotlinx-coroutines-test.
 - **Instrumented**: Compose UI Test + Room in-memory DB.
 - All tests tagged with their feature spec ID (e.g., `@Tag("FR-001")`).
+- **Save-path coverage rule (005-fix-task-end-time)**: Tests for ViewModel/Repository bugs MUST invoke the actual save-path method and assert what reaches the DAO layer (MockK slot capture or FakeRepository value recording). Tests that only call utility/helper functions provide no protection against the save-path layer. See memory/invariants.md I.IV.11.
 
 ## Database Schema (current version)
 

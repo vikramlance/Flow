@@ -1,0 +1,128 @@
+<svg viewBox="0 0 360 720" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <clipPath id="screenClip">
+      <rect x="12" y="48" width="336" height="646" rx="6"/>
+    </clipPath>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Phone body -->
+  <rect width="360" height="720" rx="40" fill="#1A1A1A" stroke="#3A3A3A" stroke-width="1.5"/>
+  <!-- Side buttons -->
+  <rect x="-1.5" y="140" width="4" height="50" rx="2" fill="#2A2A2A"/>
+  <rect x="-1.5" y="205" width="4" height="80" rx="2" fill="#2A2A2A"/>
+  <rect x="357.5" y="170" width="4" height="90" rx="2" fill="#2A2A2A"/>
+  <!-- Camera -->
+  <circle cx="180" cy="28" r="6" fill="#111111" stroke="#2A2A2A" stroke-width="1"/>
+  <circle cx="180" cy="28" r="2.5" fill="#1E1E1E"/>
+
+  <!-- Screen background -->
+  <rect x="12" y="48" width="336" height="646" rx="6" fill="#1E1E1E" clip-path="url(#screenClip)"/>
+
+  <!-- === APP BAR === -->
+  <rect x="12" y="48" width="336" height="58" fill="#1E1E1E" clip-path="url(#screenClip)"/>
+  <text x="28" y="86" font-size="24" font-weight="900" fill="#00E676" letter-spacing="-0.5">Flow</text>
+  <!-- Top bar icons -->
+  <circle cx="224" cy="77" r="13" fill="#2A2A2A"/>
+  <text x="224" y="82" text-anchor="middle" font-size="13" fill="#00E676">▶</text>
+  <circle cx="258" cy="77" r="13" fill="#2A2A2A"/>
+  <text x="258" y="82" text-anchor="middle" font-size="11" fill="#00E676">📅</text>
+  <circle cx="292" cy="77" r="13" fill="#2A2A2A"/>
+  <text x="292" y="82" text-anchor="middle" font-size="11" fill="#00E676">⏱</text>
+  <circle cx="326" cy="77" r="13" fill="#2A2A2A"/>
+  <text x="326" y="82" text-anchor="middle" font-size="11" fill="#00E676">🏆</text>
+
+  <!-- Divider -->
+  <line x1="12" y1="106" x2="348" y2="106" stroke="#2A2A2A" stroke-width="0.8"/>
+
+  <!-- === TODAY'S PROGRESS CARD === -->
+  <rect x="20" y="114" width="320" height="82" rx="14" fill="#242424" stroke="#2E2E2E" stroke-width="1"/>
+  <text x="36" y="136" font-size="10" fill="#777" letter-spacing="1.5">TODAY'S PROGRESS</text>
+  <!-- Progress text -->
+  <text x="36" y="162" font-size="22" font-weight="800" fill="#FFEB3B">3</text>
+  <text x="60" y="162" font-size="16" fill="#555"> / 5 tasks completed</text>
+  <!-- Bar -->
+  <rect x="36" y="172" width="220" height="8" rx="4" fill="#2E2E2E"/>
+  <rect x="36" y="172" width="132" height="8" rx="4" fill="#FFEB3B"/>
+  <!-- Progress ring -->
+  <circle cx="304" cy="155" r="26" fill="none" stroke="#2E2E2E" stroke-width="5"/>
+  <circle cx="304" cy="155" r="26" fill="none" stroke="#FFEB3B" stroke-width="5"
+    stroke-dasharray="98 163" stroke-dashoffset="41" stroke-linecap="round"
+    transform="rotate(-90 304 155)"/>
+  <text x="304" y="153" text-anchor="middle" font-size="10" font-weight="800" fill="#FFEB3B">60%</text>
+  <text x="304" y="164" text-anchor="middle" font-size="7" fill="#666">today</text>
+
+  <!-- === SECTION LABEL === -->
+  <text x="22" y="216" font-size="10" fill="#555" letter-spacing="2" font-weight="700">ACTIVE TASKS</text>
+
+  <!-- === TASK CARD 1: Morning Run (completed, neon green) === -->
+  <rect x="20" y="224" width="152" height="92" rx="12" fill="#0A1C0E" stroke="#00C853" stroke-width="1.5"/>
+  <rect x="20" y="224" width="152" height="3" rx="1.5" fill="#00C853"/>
+  <text x="34" y="244" font-size="8" fill="#00C853" font-weight="700">✓ COMPLETED</text>
+  <text x="34" y="263" font-size="13" font-weight="700" fill="#AAAAAA" text-decoration="line-through">Morning Run</text>
+  <text x="34" y="280" font-size="9" fill="#555">Daily · Recurring 🌱</text>
+  <rect x="34" y="289" width="100" height="4" rx="2" fill="#2A2A2A"/>
+  <rect x="34" y="289" width="100" height="4" rx="2" fill="#00C853" opacity="0.6"/>
+  <text x="34" y="306" font-size="9" fill="#00E676" font-weight="700">🔥 Streak: 14 days</text>
+
+  <!-- === TASK CARD 2: Design Review (yellow, 50%) === -->
+  <rect x="188" y="224" width="152" height="92" rx="12" fill="#1A1800" stroke="#FFEB3B" stroke-width="1.5"/>
+  <rect x="188" y="224" width="152" height="3" rx="1.5" fill="#FFEB3B"/>
+  <text x="202" y="244" font-size="8" fill="#FFEB3B" font-weight="700">⏳ IN PROGRESS</text>
+  <text x="202" y="263" font-size="13" font-weight="700" fill="#FFFFFF">Design Review</text>
+  <text x="202" y="280" font-size="9" fill="#666">Due: Mar 10, 2026</text>
+  <rect x="202" y="289" width="120" height="4" rx="2" fill="#2A2A2A"/>
+  <rect x="202" y="289" width="60" height="4" rx="2" fill="#FFEB3B"/>
+  <text x="202" y="308" font-size="9" fill="#FFEB3B">50% elapsed</text>
+
+  <!-- === TASK CARD 3: Submit Report (orange, 85%) === -->
+  <rect x="20" y="326" width="152" height="92" rx="12" fill="#1A0E00" stroke="#FF8C00" stroke-width="1.5"/>
+  <rect x="20" y="326" width="152" height="3" rx="1.5" fill="#FF8C00"/>
+  <text x="34" y="346" font-size="8" fill="#FF8C00" font-weight="700">🔥 HIGH URGENCY</text>
+  <text x="34" y="365" font-size="13" font-weight="700" fill="#FFFFFF">Submit Report</text>
+  <text x="34" y="382" font-size="9" fill="#666">Due: Mar 1, 22:00</text>
+  <rect x="34" y="391" width="120" height="4" rx="2" fill="#2A2A2A"/>
+  <rect x="34" y="391" width="102" height="4" rx="2" fill="#FF8C00"/>
+  <text x="34" y="410" font-size="9" fill="#FF8C00">85% elapsed</text>
+
+  <!-- === TASK CARD 4: Read Book (completed) === -->
+  <rect x="188" y="326" width="152" height="92" rx="12" fill="#0A1C0E" stroke="#00C853" stroke-width="1.5"/>
+  <rect x="188" y="326" width="152" height="3" rx="1.5" fill="#00C853"/>
+  <text x="202" y="346" font-size="8" fill="#00C853" font-weight="700">✓ COMPLETED</text>
+  <text x="202" y="365" font-size="13" font-weight="700" fill="#AAAAAA" text-decoration="line-through">Read Book</text>
+  <text x="202" y="382" font-size="9" fill="#555">Done at 09:45</text>
+  <rect x="202" y="391" width="120" height="4" rx="2" fill="#2A2A2A"/>
+  <rect x="202" y="391" width="120" height="4" rx="2" fill="#00C853" opacity="0.5"/>
+  <text x="202" y="410" font-size="9" fill="#00E676">Target hit!</text>
+
+  <!-- === TASK CARD 5: Gym Workout (overdue — full width) === -->
+  <rect x="20" y="428" width="320" height="80" rx="12" fill="#1A0800" stroke="#FF3D00" stroke-width="1.5"/>
+  <rect x="20" y="428" width="320" height="3" rx="1.5" fill="#FF3D00"/>
+  <text x="34" y="449" font-size="8" fill="#FF3D00" font-weight="700">⚠  OVERDUE</text>
+  <text x="34" y="468" font-size="15" font-weight="700" fill="#FFFFFF">Gym Workout</text>
+  <text x="34" y="486" font-size="9" fill="#888">Start: Feb 20 · Was due: Feb 25, 2026</text>
+  <text x="34" y="501" font-size="9" fill="#FF3D00">3 days past deadline</text>
+  <!-- Elapsed bar full red -->
+  <rect x="200" y="449" width="124" height="4" rx="2" fill="#2A2A2A"/>
+  <rect x="200" y="449" width="124" height="4" rx="2" fill="#FF3D00" opacity="0.7"/>
+  <text x="200" y="463" font-size="8" fill="#FF3D00">100%+ elapsed</text>
+
+  <!-- === SECTION LABEL === -->
+  <text x="22" y="528" font-size="10" fill="#555" letter-spacing="2" font-weight="700">GENERAL TASKS</text>
+
+  <!-- General task card -->
+  <rect x="20" y="536" width="320" height="60" rx="12" fill="#1E1E1E" stroke="#333" stroke-width="1"/>
+  <text x="36" y="556" font-size="8" fill="#888" font-weight="600">TODO</text>
+  <text x="36" y="575" font-size="13" font-weight="700" fill="#FFFFFF">Plan Q2 Roadmap</text>
+  <text x="36" y="590" font-size="9" fill="#555">No due date · 5 daily target</text>
+
+  <!-- === FAB === -->
+  <circle cx="318" cy="652" r="26" fill="#00E676"/>
+  <text x="318" y="658" text-anchor="middle" font-size="22" font-weight="300" fill="#000000">+</text>
+
+  <!-- Home indicator -->
+  <rect x="130" y="704" width="100" height="4" rx="2" fill="#444"/>
+</svg>
