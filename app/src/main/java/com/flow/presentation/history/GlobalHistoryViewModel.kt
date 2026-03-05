@@ -107,22 +107,40 @@ class GlobalHistoryViewModel @Inject constructor(
         _uiState.update { it.copy(editingTask = null) }
 
     /**
-     * Validate and save an edited [TaskEntity] from the history edit sheet.
+     * T037 — Validate and save an edited [TaskEntity] from the history edit sheet.
      *
-     * (a) If the new status is not COMPLETED, clear completionTimestamp so the task
-     *     disappears from [getCompletedNonRecurringTasks()].
-     * (b) Calls repository.updateTaskStatus() to handle completionTimestamp side-effects,
-     *     then repository.updateTask() which persists dueDate exactly as received (FR-001).
+     * For recurring tasks transitioning FROM COMPLETED to any non-completed state:
+     * find the specific task_logs entry by (taskId, completionDate) and mark it
+     * isCompleted=false so the history list updates reactively (CO-001: fix at data layer).
+     *
+     * The non-recurring path and the Home-screen path (updateTaskStatus) are unchanged.
      */
     fun saveEditTask(updated: TaskEntity) {
         viewModelScope.launch {
-            // Step (a): status side-effect (sets/clears completionTimestamp)
-            repository.updateTaskStatus(updated, updated.status)
-            // Step (b): persist all other field changes, preserving the
-            // completionTimestamp that updateTaskStatus just set/cleared
+            val originalTask = _uiState.value.editingTask
+
+            // Recurring COMPLETED → non-COMPLETED: update the originating log entry so
+            // the history list (which queries task_logs WHERE isCompleted=1) re-emits.
+            if (originalTask != null
+                && updated.isRecurring
+                && originalTask.status == TaskStatus.COMPLETED
+                && updated.status != TaskStatus.COMPLETED
+            ) {
+                val completionDate = originalTask.completionTimestamp
+                    ?.let { normaliseToMidnight(it) }
+                if (completionDate != null) {
+                    val log = repository.getLogForTaskDate(updated.id, completionDate)
+                    if (log != null) {
+                        repository.updateLog(log.copy(isCompleted = false))
+                    }
+                }
+            }
+
+            // Persist the task row with correct completionTimestamp side-effect.
             repository.updateTask(
                 updated.copy(
-                    completionTimestamp = if (updated.status == TaskStatus.COMPLETED) updated.completionTimestamp else null
+                    completionTimestamp = if (updated.status == TaskStatus.COMPLETED)
+                        updated.completionTimestamp else null
                 )
             )
             _uiState.update { it.copy(editingTask = null) }

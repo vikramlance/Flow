@@ -99,4 +99,57 @@ class AnalyticsViewModelTest {
             }
         }
     }
+
+    // ── T050(a): missedCount_includesRecurringMissedLogs ─────────────────────
+
+    @Test
+    fun missedCount_includesRecurringMissedLogs() = runTest {
+        // Stub the missed count to 5 so the ViewModel reflects it
+        fakeRepo.stubbedMissedDeadlineCount = 5
+        val vm = AnalyticsViewModel(fakeRepo)
+        val sub = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        assertEquals(
+            "missedDeadlines in uiState must reflect repository.getMissedDeadlineCount()",
+            5,
+            vm.uiState.value.missedDeadlines
+        )
+        sub.cancel()
+    }
+
+    // ── T050(b): missedCount_zeroWhenNoMissed ────────────────────────────────
+
+    @Test
+    fun missedCount_zeroWhenNoMissed() = runTest {
+        // Default FakeTaskRepository returns 0 for getMissedDeadlineCount
+        val sub = launch { viewModel.uiState.collect { } }
+        advanceUntilIdle()
+
+        assertEquals(
+            "missedDeadlines must be 0 when no missed tasks",
+            0,
+            viewModel.uiState.value.missedDeadlines
+        )
+        sub.cancel()
+    }
+
+    // ── T050(c): heatMapAndTotal_reflectBothTaskTypes ────────────────────────
+
+    @Test
+    fun heatMapAndTotal_reflectBothTaskTypes() = runTest {
+        // AnalyticsViewModel.uiState.totalCompleted comes from getCompletedTaskCount() Flow
+        // The FakeTaskRepository has a completedCountFlow that we can seed
+        fakeRepo.completedCountFlow.value = 7
+
+        val sub = launch { viewModel.uiState.collect { } }
+        advanceUntilIdle()
+
+        assertEquals(
+            "totalCompleted chip must equal completedTaskCount from repository",
+            7,
+            viewModel.uiState.value.totalCompleted
+        )
+        sub.cancel()
+    }
 }

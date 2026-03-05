@@ -30,6 +30,14 @@ class FakeTaskRepository : TaskRepository {
     val todayProgressFlow     = MutableStateFlow(TodayProgressState(0, 0))
     val achievementsFlow      = MutableStateFlow<List<AchievementEntity>>(emptyList())
 
+    // ── T036: log lookup map + capture field for T032/T033 assertions ────────
+    /** Seed via `logsByTaskDate[Pair(taskId, midnightMs)] = log` for getLogForTaskDate tests. */
+    val logsByTaskDate        = mutableMapOf<Pair<Long, Long>, TaskCompletionLog>()
+    /** Captures the last log passed to updateLog(); used by T032/T033 assertions. */
+    var lastUpdatedLog: TaskCompletionLog? = null
+    /** Counts calls to updateTaskStatus(); used by T035 to assert it's never called. */
+    var updateTaskStatusCallCount: Int = 0
+
     // ── Reactive queries ─────────────────────────────────────────────────────
     override fun getAllTasks(): Flow<List<TaskEntity>>         = allTasksFlow
     override fun getHomeScreenTasks(): Flow<List<TaskEntity>> = homeScreenTasksFlow
@@ -86,6 +94,7 @@ class FakeTaskRepository : TaskRepository {
     }
 
     override suspend fun updateTaskStatus(task: TaskEntity, newStatus: TaskStatus) {
+        updateTaskStatusCallCount++
         val updated = task.copy(
             status              = newStatus,
             completionTimestamp = if (newStatus == TaskStatus.COMPLETED) System.currentTimeMillis() else null
@@ -102,8 +111,12 @@ class FakeTaskRepository : TaskRepository {
         allTasksFlow.value.find { it.id == id }
 
     override suspend fun updateLog(log: TaskCompletionLog) {
+        lastUpdatedLog = log
         completedLogsFlow.value = completedLogsFlow.value.map { if (it.id == log.id) log else it }
     }
+
+    override suspend fun getLogForTaskDate(taskId: Long, date: Long): TaskCompletionLog? =
+        logsByTaskDate[Pair(taskId, date)]
 
     override suspend fun recalculateStreaks(taskId: Long) { /* no-op */ }
 
@@ -113,7 +126,9 @@ class FakeTaskRepository : TaskRepository {
     override suspend fun calculateCurrentStreak(): Int  = 0
     override suspend fun refreshRecurringTasks()        { /* no-op */ }
     override suspend fun getCompletedOnTimeCount(): Int = 0
-    override suspend fun getMissedDeadlineCount(): Int  = 0
+    /** Override-able stub for T050: set to a non-null value to return that instead of 0. */
+    var stubbedMissedDeadlineCount: Int? = null
+    override suspend fun getMissedDeadlineCount(): Int  = stubbedMissedDeadlineCount ?: 0
     override suspend fun getBestStreak(): Int           = 0
     override suspend fun getEarliestCompletionDate(): Long? = null
 

@@ -419,4 +419,214 @@ class TaskRepositoryImplTest {
             30, cal.get(Calendar.MINUTE)
         )
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // T019–T024 (US1 — Analytics Completed Count) & T043–T045 (US3 — Missed Count)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private val today: Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    private fun log(
+        id: Long        = 0L,
+        taskId: Long    = 1L,
+        date: Long      = today,
+        timestamp: Long = today + 3_600_000L,
+        isCompleted: Boolean = true
+    ) = TaskCompletionLog(id = id, taskId = taskId, date = date, timestamp = timestamp, isCompleted = isCompleted)
+
+    private fun nonRecurringTask(
+        id: Long,
+        completedAt: Long?,
+        dueDate: Long? = null,
+        status: TaskStatus = if (completedAt != null) TaskStatus.COMPLETED else TaskStatus.TODO
+    ) = TaskEntity(
+        id = id, title = "Task $id",
+        isRecurring = false,
+        status = status,
+        completionTimestamp = completedAt,
+        dueDate = dueDate
+    )
+
+    // ── T019: getHeatMapData merges recurring logs + non-recurring timestamps ─
+
+    @Test
+    fun getHeatMapData_includesNonRecurringCompletions() = runTest {
+        val startMs = today - 7 * 86_400_000L
+        val endMs   = today
+
+        val logs = listOf(
+            log(id = 1L, taskId = 1L, date = today),
+            log(id = 2L, taskId = 2L, date = today),
+            log(id = 3L, taskId = 3L, date = today)
+        )
+        // 2 non-recurring completions with timestamps normalised to 'today'
+        val timestamps = listOf(today + 1_000L, today + 2_000L)
+
+        every { taskCompletionLogDao.getLogsBetween(startMs, endMs) } returns flowOf(logs)
+        every { taskDao.getCompletedNonRecurringInRange(startMs, endMs) } returns flowOf(timestamps)
+
+        val heatMap = repository.getHeatMapData(startMs, endMs).first()
+
+        assertEquals("heatMap[today] = 3 recurring + 2 non-recurring = 5", 5, heatMap[today])
+    }
+
+    // ── T020: getHeatMapData returns empty map when no completions ────────────
+
+    @Test
+    fun getHeatMapData_zeroWhenNoCompletions() = runTest {
+        val startMs = today - 7 * 86_400_000L
+        val endMs   = today
+
+        every { taskCompletionLogDao.getLogsBetween(startMs, endMs) } returns flowOf(emptyList())
+        every { taskDao.getCompletedNonRecurringInRange(startMs, endMs) } returns flowOf(emptyList())
+
+        val heatMap = repository.getHeatMapData(startMs, endMs).first()
+
+        assertEquals("Empty map expected when both sources return nothing",
+                     emptyMap<Long, Int>(), heatMap)
+    }
+
+    // ── T021: getCompletedOnTimeCount sums both sources ───────────────────────
+
+    @Test
+    fun getCompletedOnTimeCount_sumsBothSources() = runTest {
+        coEvery { taskDao.getCompletedOnTimeCount() } returns 2
+        coEvery { taskCompletionLogDao.getRecurringOnTimeCount() } returns 3
+
+        val result = repository.getCompletedOnTimeCount()
+
+        assertEquals("Non-recurring(2) + recurring(3) on-time must equal 5", 5, result)
+    }
+
+    // ── T022: getLifetimeStats totalCompleted includes recurring logs ─────────
+
+    @Test
+    fun getLifetimeStats_totalIncludesRecurringLogs() = runTest {
+        // 4 recurring completed log entries
+        coEvery { taskCompletionLogDao.getTotalCompletedLogCount() } returns 4
+
+        // 2 non-recurring COMPLETED tasks + 1 recurring (excluded from non-recurring total)
+        val tasks = listOf(
+            nonRecurringTask(1L, completedAt = today - 1_000L),
+            nonRecurringTask(2L, completedAt = today - 2_000L),
+            TaskEntity(id = 3L, title = "Recurring", isRecurring = true,
+                       status = TaskStatus.COMPLETED, completionTimestamp = today - 3_000L)
+        )
+        every { taskDao.getAllTasks() } returns flowOf(tasks)
+
+        // Stub internal on-time calls so getBestStreak chain doesn't fail
+        coEvery { taskDao.getCompletedOnTimeCount() } returns 0
+        coEvery { taskCompletionLogDao.getRecurringOnTimeCount() } returns 0
+        every { taskCompletionLogDao.getLogsForTask(any()) } returns flowOf(emptyList())
+
+        val stats = repository.getLifetimeStats()
+
+        assertEquals("totalCompleted = 4 (logs) + 2 (non-recurring tasks) = 6",
+                     6, stats.totalCompleted)
+    }
+
+    // ── T023: getCurrentYearStats completedThisYear includes non-recurring ────
+
+    @Test
+    fun getCurrentYearStats_completedThisYearIncludesNonRecurring() = runTest {
+        val year    = Calendar.getInstance().get(Calendar.YEAR)
+        val jan1    = Calendar.getInstance().apply {
+            set(year, Calendar.JANUARY, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val midYear = jan1 + 180L * 86_400_000L  // ~mid-year
+
+        // 3 recurring completed logs within this year
+        val logsThisYear = listOf(
+            log(id = 1L, taskId = 1L, date = jan1,    timestamp = jan1 + 1_000L),
+            log(id = 2L, taskId = 2L, date = midYear, timestamp = midYear + 1_000L),
+            log(id = 3L, taskId = 3L, date = midYear, timestamp = midYear + 2_000L)
+        )
+        every { taskCompletionLogDao.getLogsBetween(any(), any()) } returns flowOf(logsThisYear)
+
+        // 2 non-recurring tasks completed within this year
+        val tasks = listOf(
+            nonRecurringTask(10L, completedAt = jan1 + 5_000L),
+            nonRecurringTask(11L, completedAt = midYear + 5_000L)
+        )
+        every { taskDao.getAllTasks() } returns flowOf(tasks)
+        every { taskCompletionLogDao.getLogsForTask(any()) } returns flowOf(emptyList())
+        coEvery { taskDao.getCompletedOnTimeCount() } returns 0
+        coEvery { taskCompletionLogDao.getRecurringOnTimeCount() } returns 0
+
+        val stats = repository.getCurrentYearStats()
+
+        assertEquals("completedThisYear = 3 (logs) + 2 (non-recurring) = 5",
+                     5, stats.completedThisYear)
+    }
+
+    // ── T024: getEarliestCompletionDate returns minimum of both sources ───────
+
+    @Test
+    fun getEarliestCompletionDate_returnsMinOfBothSources() = runTest {
+        coEvery { taskCompletionLogDao.getEarliestCompletionDate() } returns 1_000L
+        coEvery { taskDao.getEarliestNonRecurringCompletionDate() } returns 50L
+
+        val result = repository.getEarliestCompletionDate()
+
+        assertEquals("Must return the minimum of both sources (50)", 50L, result)
+    }
+
+    @Test
+    fun getEarliestCompletionDate_logEarlierThanNonRecurring() = runTest {
+        coEvery { taskCompletionLogDao.getEarliestCompletionDate() } returns 100L
+        coEvery { taskDao.getEarliestNonRecurringCompletionDate() } returns 5_000L
+
+        val result = repository.getEarliestCompletionDate()
+
+        assertEquals("Must return the log's earlier date (100)", 100L, result)
+    }
+
+    @Test
+    fun getEarliestCompletionDate_returnsNullWhenBothEmpty() = runTest {
+        coEvery { taskCompletionLogDao.getEarliestCompletionDate() } returns null
+        coEvery { taskDao.getEarliestNonRecurringCompletionDate() } returns null
+
+        val result = repository.getEarliestCompletionDate()
+
+        assertNull("Must return null when both sources are empty", result)
+    }
+
+    // ── T043: getMissedDeadlineCount sums both sources ────────────────────────
+
+    @Test
+    fun getMissedDeadlineCount_sumsBothSources() = runTest {
+        coEvery { taskDao.getMissedDeadlineCount(any()) } returns 2
+        coEvery { taskCompletionLogDao.getRecurringMissedCount(any()) } returns 3
+
+        val result = repository.getMissedDeadlineCount()
+
+        assertEquals("Non-recurring(2) + recurring(3) missed = 5", 5, result)
+    }
+
+    // ── T044: getMissedDeadlineCount — only recurring logged ─────────────────
+
+    @Test
+    fun getMissedDeadlineCount_onlyRecurringMissed_countedFromLogs() = runTest {
+        coEvery { taskDao.getMissedDeadlineCount(any()) } returns 0
+        coEvery { taskCompletionLogDao.getRecurringMissedCount(any()) } returns 3
+
+        val result = repository.getMissedDeadlineCount()
+
+        assertEquals("0 non-recurring + 3 recurring missed = 3", 3, result)
+    }
+
+    // ── T045: getMissedDeadlineCount regression — non-recurring-only ─────────
+
+    @Test
+    fun getMissedDeadlineCount_onlyNonRecurring_unchanged() = runTest {
+        coEvery { taskDao.getMissedDeadlineCount(any()) } returns 2
+        coEvery { taskCompletionLogDao.getRecurringMissedCount(any()) } returns 0
+
+        val result = repository.getMissedDeadlineCount()
+
+        assertEquals("2 non-recurring + 0 recurring missed = 2 (regression)", 2, result)
+    }
 }
