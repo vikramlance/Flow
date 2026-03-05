@@ -105,6 +105,11 @@ class FakeTaskRepository : TaskRepository {
         completedLogsFlow.value = completedLogsFlow.value.map { if (it.id == log.id) log else it }
     }
 
+    val logsByTaskDate = mutableMapOf<Pair<Long, Long>, TaskCompletionLog>()
+
+    override suspend fun getLogForTaskDate(taskId: Long, date: Long): TaskCompletionLog? =
+        logsByTaskDate[Pair(taskId, date)]
+
     override suspend fun recalculateStreaks(taskId: Long) { /* no-op */ }
 
     override suspend fun checkAndAwardAchievements(taskId: Long?) { /* no-op */ }

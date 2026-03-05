@@ -116,4 +116,61 @@ class TaskCompletionLogDaoTest {
         dao.insertLog(log(taskId = 30L))
         assertEquals(3, dao.getAllCompletedLogs().first().size)
     }
+
+    // ── T007: getRecurringOnTimeCount ─────────────────────────────────────────
+
+    @Test
+    fun getRecurringOnTimeCount_countsLogsWithinScheduledDay() = runTest {
+        // On-time: timestamp <= date + 86340000 (23h 59m)
+        dao.insertLog(log(date = 1_000_000L, timestamp = 1_000_000L + 86_339_000L, isCompleted = true))  // just before cutoff
+        dao.insertLog(log(date = 2_000_000L, timestamp = 2_000_000L + 1_000L,      isCompleted = true))  // early
+        dao.insertLog(log(date = 3_000_000L, timestamp = 3_000_000L + 86_340_000L, isCompleted = true))  // exactly at cutoff
+        // Late: timestamp > date + 86340000
+        dao.insertLog(log(date = 4_000_000L, timestamp = 4_000_000L + 86_341_000L, isCompleted = true))  // 1 ms late
+        dao.insertLog(log(date = 5_000_000L, timestamp = 5_000_000L + 100_000_000L, isCompleted = true)) // very late
+        // Incomplete: should not count regardless of timing
+        dao.insertLog(log(date = 6_000_000L, timestamp = 6_000_000L + 1_000L,      isCompleted = false))
+
+        val count = dao.getRecurringOnTimeCount()
+        assertEquals("3 on-time completed logs expected", 3, count)
+    }
+
+    // ── T008: getRecurringMissedCount ─────────────────────────────────────────
+
+    @Test
+    fun getRecurringMissedCount_countsPastIncompleteLogs() = runTest {
+        val todayMidnight = System.currentTimeMillis().let { now ->
+            now - (now % 86_400_000L)  // rough midnight; exact value used in production
+        }
+        val past1 = todayMidnight - 86_400_000L       // yesterday
+        val past2 = todayMidnight - 2 * 86_400_000L  // two days ago
+        val past3 = todayMidnight - 3 * 86_400_000L  // three days ago
+
+        // 3 past incomplete (should be counted as missed)
+        dao.insertLog(log(date = past1, isCompleted = false))
+        dao.insertLog(log(date = past2, isCompleted = false))
+        dao.insertLog(log(date = past3, isCompleted = false))
+        // 2 today incomplete (date == todayMidnight — NOT past, not missed yet)
+        dao.insertLog(log(date = todayMidnight, isCompleted = false))
+        dao.insertLog(log(date = todayMidnight, isCompleted = false))
+        // Past completed (should not count as missed)
+        dao.insertLog(log(date = past1, isCompleted = true))
+
+        val count = dao.getRecurringMissedCount(todayMidnight)
+        assertEquals("3 past-incomplete logs should be counted as missed", 3, count)
+    }
+
+    // ── T009: getTotalCompletedLogCount ───────────────────────────────────────
+
+    @Test
+    fun getTotalCompletedLogCount_returnsAllCompletedLogs() = runTest {
+        // 5 completed
+        repeat(5) { i -> dao.insertLog(log(taskId = i.toLong() + 1, isCompleted = true)) }
+        // 2 incomplete
+        dao.insertLog(log(taskId = 10L, isCompleted = false))
+        dao.insertLog(log(taskId = 11L, isCompleted = false))
+
+        val count = dao.getTotalCompletedLogCount()
+        assertEquals("5 completed logs expected", 5, count)
+    }
 }

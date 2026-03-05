@@ -19,6 +19,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-20
 - Room (`TaskEntity.dueDate: Long?`, stored as epoch millis) (005-fix-task-end-time)
 - Kotlin 2.0 (JVM target 11) (005-fix-task-end-time)
 - Room 2.6 (`TaskDao`, `TaskEntity`) — SQLite, local-only, no network (005-fix-task-end-time)
+- Kotlin 2.0 + Room 2.6 (DAO queries), Hilt (DI), Kotlin Coroutines + Flow (reactive state), Jetpack Compose + Material 3 (UI — read-only for this fix) (006-fix-analytics-stats)
+- Room / SQLite — tables `tasks` and `task_logs`; no schema changes (006-fix-analytics-stats)
 
 - Kotlin 2.0.20 (K2 compiler); JVM target Java 8 + Jetpack Compose BOM 2024.09.02, Material 3, Hilt 2.52, Room 2.6.1, DataStore 1.1.1, Lifecycle 2.8.6, Navigation Compose 2.8.x, Hilt Navigation Compose 1.2.0 (001-app-analysis)
 
@@ -38,9 +40,9 @@ tests/
 Kotlin 2.0.20 (K2 compiler); JVM target Java 8: Follow standard conventions
 
 ## Recent Changes
+- 006-fix-analytics-stats: Added Kotlin 2.0 + Room 2.6 (DAO queries), Hilt (DI), Kotlin Coroutines + Flow (reactive state), Jetpack Compose + Material 3 (UI — read-only for this fix)
 - 005-fix-task-end-time: Added Kotlin 2.0 (JVM target 11)
 - 005-fix-task-end-time: Added Kotlin 1.9, Android API 34 (minSdk 24)
-- 005-fix-task-end-time: Added Kotlin (Android 14, API 34), Compose + Android Jetpack Compose (androidx.compose)
 
 
 <!-- MANUAL ADDITIONS START -->

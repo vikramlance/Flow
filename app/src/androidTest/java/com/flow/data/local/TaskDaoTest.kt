@@ -309,4 +309,85 @@ class TaskDaoTest {
         val result = dao.getTasksDueInRange(todayStart, todayStart + 86_399_999L).first()
         assertEquals("All 3 same-day tasks must be included in range query", 3, result.size)
     }
+
+    // ── T003: getCompletedNonRecurringInRange ─────────────────────────────────
+
+    @Test
+    fun getCompletedNonRecurringInRange_returnsOnlyNonRecurringInWindow() = runTest {
+        val start = todayStart
+        val end   = todayStart + 86_399_999L
+        // 2 non-recurring completed inside range
+        insert(
+            TaskEntity(title = "NR-In-1", isRecurring = false, completionTimestamp = start + 1_000),
+            TaskEntity(title = "NR-In-2", isRecurring = false, completionTimestamp = start + 2_000),
+            // 1 non-recurring outside range (yesterday)
+            TaskEntity(title = "NR-Out",  isRecurring = false, completionTimestamp = yesterdayStart + 1_000),
+            // 1 recurring inside range (must be excluded)
+            TaskEntity(title = "R-In",    isRecurring = true,  completionTimestamp = start + 3_000)
+        )
+        val result = dao.getCompletedNonRecurringInRange(start, end).first()
+        assertEquals(2, result.size)
+        assertTrue(result.all { it >= start && it <= end })
+    }
+
+    // ── T004: getEarliestNonRecurringCompletionDate ───────────────────────────
+
+    @Test
+    fun getEarliestNonRecurringCompletionDate_returnsMinTimestamp() = runTest {
+        val ts1 = yesterdayStart + 1_000
+        val ts2 = yesterdayStart + 5_000
+        val ts3 = todayStart     + 1_000
+        insert(
+            TaskEntity(title = "NR-1", isRecurring = false, completionTimestamp = ts2),
+            TaskEntity(title = "NR-2", isRecurring = false, completionTimestamp = ts1),
+            TaskEntity(title = "NR-3", isRecurring = false, completionTimestamp = ts3)
+        )
+        val result = dao.getEarliestNonRecurringCompletionDate()
+        assertEquals(ts1, result)
+    }
+
+    @Test
+    fun getEarliestNonRecurringCompletionDate_returnsNullWhenNoCompletions() = runTest {
+        // No tasks with completionTimestamp
+        insert(TaskEntity(title = "Incomplete", isRecurring = false))
+        val result = dao.getEarliestNonRecurringCompletionDate()
+        assertEquals(null, result)
+    }
+
+    // ── T005: getMissedDeadlineCount excludes recurring ───────────────────────
+
+    @Test
+    fun getMissedDeadlineCount_excludesRecurringTasks() = runTest {
+        val now = System.currentTimeMillis()
+        val overdue = yesterdayStart + 1_000  // clearly in the past
+        // 3 overdue non-recurring tasks (should be counted)
+        insert(
+            TaskEntity(title = "NR-Miss-1", isRecurring = false, dueDate = overdue, status = TaskStatus.TODO),
+            TaskEntity(title = "NR-Miss-2", isRecurring = false, dueDate = overdue, status = TaskStatus.TODO),
+            TaskEntity(title = "NR-Miss-3", isRecurring = false, dueDate = overdue, status = TaskStatus.IN_PROGRESS),
+            // 2 overdue recurring tasks (must be excluded — counted from task_logs instead)
+            TaskEntity(title = "R-Miss-1",  isRecurring = true,  dueDate = overdue, status = TaskStatus.TODO),
+            TaskEntity(title = "R-Miss-2",  isRecurring = true,  dueDate = overdue, status = TaskStatus.TODO)
+        )
+        val count = dao.getMissedDeadlineCount(now)
+        assertEquals("Only 3 non-recurring overdue tasks should be counted", 3, count)
+    }
+
+    // ── T006 / T013: getCompletedOnTimeCount excludes transient recurring ─────
+
+    @Test
+    fun getCompletedOnTimeCount_excludesTransientRecurringRows() = runTest {
+        val due    = todayStart + 86_340_000L // 11:59 PM today
+        val onTime = due - 1_000L             // completed before due
+        // 2 non-recurring completed on time (should be counted)
+        insert(
+            TaskEntity(title = "NR-OnTime-1", isRecurring = false, dueDate = due, completionTimestamp = onTime),
+            TaskEntity(title = "NR-OnTime-2", isRecurring = false, dueDate = due, completionTimestamp = onTime),
+            // 1 recurring COMPLETED (transient state before daily reset — must NOT be counted here)
+            TaskEntity(title = "R-Transient", isRecurring = true,  dueDate = due, completionTimestamp = onTime,
+                       status = TaskStatus.COMPLETED)
+        )
+        val count = dao.getCompletedOnTimeCount()
+        assertEquals("Only 2 non-recurring on-time tasks should be counted", 2, count)
+    }
 }

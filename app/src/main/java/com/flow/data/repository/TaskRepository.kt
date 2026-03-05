@@ -110,6 +110,13 @@ interface TaskRepository {
     /** T014 — Update an existing TaskCompletionLog entry (for history editing). */
     suspend fun updateLog(log: TaskCompletionLog)
 
+    /**
+     * T025 — Look up a single TaskCompletionLog by task and calendar-day (midnight epoch);
+     * null if not found. Used by GlobalHistoryViewModel.saveEditTask to find the specific
+     * log entry when a recurring task's status is changed from history (Contract 3).
+     */
+    suspend fun getLogForTaskDate(taskId: Long, date: Long): TaskCompletionLog?
+
     /** T014 — Recalculate streak for a task after completion or log edit. */
     suspend fun recalculateStreaks(taskId: Long)
 

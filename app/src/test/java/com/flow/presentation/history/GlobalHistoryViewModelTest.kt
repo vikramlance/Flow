@@ -2,6 +2,7 @@ package com.flow.presentation.history
 
 import com.flow.data.local.TaskCompletionLog
 import com.flow.data.local.TaskEntity
+import com.flow.data.local.TaskStatus
 import com.flow.fake.FakeTaskRepository
 import com.flow.utils.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -380,6 +381,126 @@ class GlobalHistoryViewModelTest {
         val state = vm.uiState.value
         assertEquals(null, state.editingTask)
         assertEquals("Task not found", state.error)
+        job.cancel()
+    }
+
+    // ── T032: saveEditTask recurring COMPLETED → TODO updates log ────────────
+
+    @Test
+    fun `saveEditTask_recurringCompletedToTodo_updatesLogToNotCompleted`() = runTest {
+        val completedAt = today  // already midnight
+        val task = makeRecurringTask(1L, "Recurring", dueDate = today)
+            .copy(status = TaskStatus.COMPLETED, completionTimestamp = completedAt)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        // Seed log for (taskId=1, date=today)
+        val logEntry = makeLog(1L, completedAt).copy(isCompleted = true)
+        fakeRepo.logsByTaskDate[Pair(1L, completedAt)] = logEntry
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.openEditTask(1L)
+        advanceUntilIdle()
+        assertNotNull("editingTask must be set", vm.uiState.value.editingTask)
+
+        vm.saveEditTask(task.copy(status = TaskStatus.TODO))
+        advanceUntilIdle()
+
+        assertEquals("Log must be marked not-completed after recurring task reverted to TODO",
+                     false, fakeRepo.lastUpdatedLog?.isCompleted)
+        job.cancel()
+    }
+
+    // ── T033: saveEditTask recurring COMPLETED → IN_PROGRESS updates log ─────
+
+    @Test
+    fun `saveEditTask_recurringCompletedToInProgress_updatesLogToNotCompleted`() = runTest {
+        val completedAt = today
+        val task = makeRecurringTask(2L, "Recurring2", dueDate = today)
+            .copy(status = TaskStatus.COMPLETED, completionTimestamp = completedAt)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val logEntry = makeLog(2L, completedAt).copy(isCompleted = true)
+        fakeRepo.logsByTaskDate[Pair(2L, completedAt)] = logEntry
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.openEditTask(2L)
+        advanceUntilIdle()
+
+        vm.saveEditTask(task.copy(status = TaskStatus.IN_PROGRESS))
+        advanceUntilIdle()
+
+        assertEquals("Log must be marked not-completed after recurring task reverted to IN_PROGRESS",
+                     false, fakeRepo.lastUpdatedLog?.isCompleted)
+        job.cancel()
+    }
+
+    // ── T034: saveEditTask non-recurring does NOT touch log ───────────────────
+
+    @Test
+    fun `saveEditTask_nonRecurring_doesNotTouchLog`() = runTest {
+        val completedAt = today
+        val task = makeNonRecurringTask(3L, "One-off", completedAt = completedAt)
+            .copy(status = TaskStatus.COMPLETED)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.openEditTask(3L)
+        advanceUntilIdle()
+
+        vm.saveEditTask(task.copy(status = TaskStatus.TODO))
+        advanceUntilIdle()
+
+        assertEquals("Log path must NOT be invoked for non-recurring tasks",
+                     null, fakeRepo.lastUpdatedLog)
+        job.cancel()
+    }
+
+    // ── T035: saveEditTask never calls updateTaskStatus ───────────────────────
+
+    @Test
+    fun `saveEditTask_doesNotInvokeUpdateTaskStatus`() = runTest {
+        val task = makeNonRecurringTask(4L, "Task", completedAt = today)
+        fakeRepo.allTasksFlow.value = listOf(task)
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        vm.saveEditTask(task.copy(title = "Updated Title"))
+        advanceUntilIdle()
+
+        assertEquals("saveEditTask must NEVER call updateTaskStatus (FR-006 / history fix)",
+                     0, fakeRepo.updateTaskStatusCallCount)
+        job.cancel()
+    }
+
+    // ── T035a: history list never shows non-completed recurring tasks ─────────
+
+    @Test
+    fun `historyList_neverShowsNonCompletedTask`() = runTest {
+        // Recurring task with TODO status in the tasks list
+        val todoTask = makeRecurringTask(5L, "Pending Recurring")
+            .copy(status = TaskStatus.TODO)
+        fakeRepo.allTasksFlow.value = listOf(todoTask)
+        // completedLogsFlow is empty — no completed log for this task
+        fakeRepo.completedLogsFlow.value = emptyList()
+
+        val vm = buildVm()
+        val job = launch { vm.uiState.collect { } }
+        advanceUntilIdle()
+
+        val items = vm.filteredItems(vm.uiState.value)
+        assertTrue("A TODO recurring task must NOT appear in the history list",
+                   items.none { it.taskId == 5L })
         job.cancel()
     }
 }

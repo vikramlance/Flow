@@ -36,13 +36,43 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE dueDate IS NOT NULL AND dueDate < :now AND status != 'COMPLETED'")
     fun getOverdueTasks(now: Long): Flow<List<TaskEntity>>
 
-    /** Count tasks completed (status=COMPLETED) whose dueDate is not null + completionTimestamp <= dueDate. */
-    @Query("SELECT COUNT(*) FROM tasks WHERE completionTimestamp IS NOT NULL AND dueDate IS NOT NULL AND completionTimestamp <= dueDate")
+    /**
+     * Count non-recurring tasks completed on time.
+     * AND isRecurring = 0 prevents transient double-counting during the window between
+     * recurring task completion and daily refresh (Contract 5).
+     */
+    @Query("SELECT COUNT(*) FROM tasks WHERE completionTimestamp IS NOT NULL AND dueDate IS NOT NULL AND completionTimestamp <= dueDate AND isRecurring = 0")
     suspend fun getCompletedOnTimeCount(): Int
 
-    /** Count tasks whose dueDate has passed and status is still not COMPLETED. */
-    @Query("SELECT COUNT(*) FROM tasks WHERE dueDate IS NOT NULL AND dueDate < :now AND status != 'COMPLETED'")
+    /**
+     * Count non-recurring tasks whose dueDate has passed and status is still not COMPLETED.
+     * AND isRecurring = 0 ensures recurring missed occurrences are counted separately
+     * from task_logs (Contract 1 / Finding 3).
+     */
+    @Query("SELECT COUNT(*) FROM tasks WHERE dueDate IS NOT NULL AND dueDate < :now AND status != 'COMPLETED' AND isRecurring = 0")
     suspend fun getMissedDeadlineCount(now: Long): Int
+
+    /**
+     * T010 — React list of completionTimestamp values for completed non-recurring tasks
+     * within [startMs, endMs]. Used by getHeatMapData to merge the non-recurring half
+     * of the heatmap (Contract 1 / Finding 1).
+     */
+    @Query("""
+        SELECT completionTimestamp FROM tasks
+        WHERE isRecurring = 0
+          AND completionTimestamp IS NOT NULL
+          AND completionTimestamp >= :startMs
+          AND completionTimestamp <= :endMs
+    """)
+    fun getCompletedNonRecurringInRange(startMs: Long, endMs: Long): Flow<List<Long>>
+
+    /**
+     * T011 — Earliest completionTimestamp of any completed non-recurring task.
+     * Used by getEarliestCompletionDate() to include non-recurring tasks in
+     * the available year range (Contract 1 / Finding 7).
+     */
+    @Query("SELECT MIN(completionTimestamp) FROM tasks WHERE isRecurring = 0 AND completionTimestamp IS NOT NULL")
+    suspend fun getEarliestNonRecurringCompletionDate(): Long?
 
     /**
      * T002 — Home-screen filtered list (5-rule logic, FR-003/FR-004):

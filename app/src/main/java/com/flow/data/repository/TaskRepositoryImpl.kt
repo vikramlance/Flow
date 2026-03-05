@@ -17,6 +17,7 @@ import com.flow.data.local.TaskStreakEntity
 import com.flow.domain.streak.DayMask
 import com.flow.domain.streak.StreakCalculator
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -65,10 +66,24 @@ class TaskRepositoryImpl @Inject constructor(
 
     // ── Heatmap ─────────────────────────────────────────────────────────
 
-    override fun getHeatMapData(startMs: Long, endMs: Long): Flow<Map<Long, Int>> =
-        taskCompletionLogDao.getLogsBetween(startMs, endMs).map { logs ->
-            logs.groupBy { it.date }.mapValues { (_, v) -> v.size }
+    /**
+     * T026 — Merge recurring completions (task_logs) and non-recurring completions
+     * (tasks.completionTimestamp) into a single midnight-epoch → count map.
+     * Both sources are reactive Room Flows; combine() re-emits on any change.
+     */
+    override fun getHeatMapData(startMs: Long, endMs: Long): Flow<Map<Long, Int>> {
+        val recurringFlow    = taskCompletionLogDao.getLogsBetween(startMs, endMs)
+        val nonRecurringFlow = taskDao.getCompletedNonRecurringInRange(startMs, endMs)
+        return combine(recurringFlow, nonRecurringFlow) { logs, timestamps ->
+            val fromLogs  = logs.groupBy { it.date }.mapValues { (_, v) -> v.size }
+            val fromTasks = timestamps
+                .groupBy { normaliseToMidnight(it) }
+                .mapValues { (_, v) -> v.size }
+            (fromLogs.keys + fromTasks.keys).associateWith { key ->
+                (fromLogs[key] ?: 0) + (fromTasks[key] ?: 0)
+            }
         }
+    }
 
     override fun getHeatMapData(): Flow<Map<Long, Int>> =
         dailyProgressDao.getAllHistory().map { rows ->
@@ -216,6 +231,10 @@ class TaskRepositoryImpl @Inject constructor(
 
     override suspend fun getTaskById(id: Long): TaskEntity? = taskDao.getTaskById(id)
 
+    /** T025 — Passthrough to DAO; exposes log lookup on the repository interface. */
+    override suspend fun getLogForTaskDate(taskId: Long, date: Long): TaskCompletionLog? =
+        taskCompletionLogDao.getLogForTaskDate(taskId, date)
+
     override suspend fun updateLog(log: TaskCompletionLog) {
         taskCompletionLogDao.updateLog(log)
     }
@@ -344,10 +363,22 @@ class TaskRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getCompletedOnTimeCount(): Int = taskDao.getCompletedOnTimeCount()
+    /**
+     * T027 — On-time count: non-recurring (tasks table) + recurring (task_logs).
+     * TaskDao.getCompletedOnTimeCount already has AND isRecurring = 0 after T013 fix.
+     */
+    override suspend fun getCompletedOnTimeCount(): Int =
+        taskDao.getCompletedOnTimeCount() + taskCompletionLogDao.getRecurringOnTimeCount()
 
-    override suspend fun getMissedDeadlineCount(): Int =
-        taskDao.getMissedDeadlineCount(System.currentTimeMillis())
+    /**
+     * T047 — Missed count: non-recurring (tasks table, isRecurring = 0) +
+     * recurring past-incomplete logs (task_logs WHERE isCompleted=0 AND date < today).
+     */
+    override suspend fun getMissedDeadlineCount(): Int {
+        val todayMidnight = normaliseToMidnight(System.currentTimeMillis())
+        return taskDao.getMissedDeadlineCount(System.currentTimeMillis()) +
+               taskCompletionLogDao.getRecurringMissedCount(todayMidnight)
+    }
 
     override suspend fun getBestStreak(): Int {
         val recurringTasks = taskDao.getAllTasks().firstOrNull()?.filter { it.isRecurring } ?: return 0
@@ -357,9 +388,16 @@ class TaskRepositoryImpl @Inject constructor(
         } ?: 0
     }
 
+    /**
+     * T028 — Lifetime stats: total = recurring log count + non-recurring COMPLETED task count.
+     * T027 already fixes onTime; reuse getCompletedOnTimeCount() here for consistency.
+     */
     override suspend fun getLifetimeStats(): LifetimeStats {
-        val total     = taskDao.getCompletedTaskCount().firstOrNull() ?: 0
-        val onTime    = taskDao.getCompletedOnTimeCount()
+        val totalRecurring    = taskCompletionLogDao.getTotalCompletedLogCount()
+        val totalNonRecurring = taskDao.getAllTasks().firstOrNull()
+            ?.count { !it.isRecurring && it.status == TaskStatus.COMPLETED } ?: 0
+        val total     = totalRecurring + totalNonRecurring
+        val onTime    = getCompletedOnTimeCount()
         val onTimePct = if (total == 0) 0f else onTime / total.toFloat()
         val best      = getBestStreak()
         val habits    = taskDao.getAllTasks().firstOrNull()?.count { it.isRecurring } ?: 0
@@ -372,6 +410,10 @@ class TaskRepositoryImpl @Inject constructor(
         )
     }
 
+    /**
+     * T029 — Current-year stats: include both recurring log completions (existing)
+     * and non-recurring task completions within the year range.
+     */
     override suspend fun getCurrentYearStats(): CurrentYearStats {
         val year  = Calendar.getInstance().get(Calendar.YEAR)
         val jan1  = normaliseToMidnight(
@@ -382,18 +424,28 @@ class TaskRepositoryImpl @Inject constructor(
                 Calendar.getInstance().apply { set(year, Calendar.DECEMBER, 31) }.timeInMillis
             )
         )
-        val logsThisYear      = taskCompletionLogDao.getLogsBetween(jan1, dec31)
+        val logsThisYear = taskCompletionLogDao.getLogsBetween(jan1, dec31)
             .firstOrNull()?.filter { it.isCompleted } ?: emptyList()
-        val completedThisYear = logsThisYear.size
 
         val allTasks = taskDao.getAllTasks().firstOrNull() ?: emptyList()
-        val eligible = allTasks.filter { t ->
-            !t.isRecurring && t.completionTimestamp != null && t.completionTimestamp in jan1..dec31
+        val nonRecurringThisYear = allTasks.count { t ->
+            !t.isRecurring && t.completionTimestamp != null &&
+                t.completionTimestamp in jan1..dec31
         }
-        val onTime = eligible.count { t ->
-            t.completionTimestamp != null && t.dueDate != null && t.completionTimestamp <= t.dueDate
+
+        val completedThisYear = logsThisYear.size + nonRecurringThisYear
+
+        val eligibleOnTime = allTasks.filter { t ->
+            !t.isRecurring && t.completionTimestamp != null &&
+                t.completionTimestamp in jan1..dec31
         }
-        val onTimeRate = if (eligible.isEmpty()) 0f else onTime / eligible.size.toFloat()
+        val onTimeNonRecurring = eligibleOnTime.count { t ->
+            t.completionTimestamp != null && t.dueDate != null &&
+                t.completionTimestamp <= t.dueDate
+        }
+        val onTimeRecurring = logsThisYear.count { it.timestamp <= it.date + 86_340_000L }
+        val totalOnTime    = onTimeNonRecurring + onTimeRecurring
+        val onTimeRate     = if (completedThisYear == 0) 0f else totalOnTime / completedThisYear.toFloat()
 
         return CurrentYearStats(
             completedThisYear  = completedThisYear,
@@ -402,8 +454,15 @@ class TaskRepositoryImpl @Inject constructor(
         )
     }
 
-    override suspend fun getEarliestCompletionDate(): Long? =
-        taskCompletionLogDao.getEarliestCompletionDate()
+    /**
+     * T030 — Earliest completion: minimum of first log date and first non-recurring
+     * completion timestamp; ensures year-range analytics includes non-recurring tasks.
+     */
+    override suspend fun getEarliestCompletionDate(): Long? {
+        val logEarliest  = taskCompletionLogDao.getEarliestCompletionDate()
+        val taskEarliest = taskDao.getEarliestNonRecurringCompletionDate()
+        return listOfNotNull(logEarliest, taskEarliest).minOrNull()
+    }
 
     // ── Private helpers ───────────────────────────────────────────────────
 

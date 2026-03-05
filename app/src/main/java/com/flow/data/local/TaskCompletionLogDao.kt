@@ -68,4 +68,35 @@ interface TaskCompletionLogDao {
     /** Non-reactive: earliest completion date across all tasks; null if no data. */
     @Query("SELECT MIN(date) FROM task_logs WHERE isCompleted = 1")
     suspend fun getEarliestCompletionDate(): Long?
+
+    /**
+     * T014 — Count recurring completions that occurred within the same scheduled day.
+     * 86340000 ms = 23h 59m, matching refreshRecurringTasks dueDate = midnight + 86_340_000L.
+     * Used by getCompletedOnTimeCount() (Contract 2 / Finding 2).
+     */
+    @Query("""
+        SELECT COUNT(*) FROM task_logs
+        WHERE isCompleted = 1
+          AND timestamp <= (date + 86340000)
+    """)
+    suspend fun getRecurringOnTimeCount(): Int
+
+    /**
+     * T015 — Count past recurring log entries that were never completed.
+     * Only counts logs for PAST days (date < todayMidnight) so today's in-progress
+     * recurring tasks are not yet classified as missed (Contract 2 / Finding 3).
+     */
+    @Query("""
+        SELECT COUNT(*) FROM task_logs
+        WHERE isCompleted = 0
+          AND date < :todayMidnight
+    """)
+    suspend fun getRecurringMissedCount(todayMidnight: Long): Int
+
+    /**
+     * T016 — Total count of all completed recurring log entries across all time.
+     * Used by getLifetimeStats().totalCompleted (Contract 2 / Finding 6).
+     */
+    @Query("SELECT COUNT(*) FROM task_logs WHERE isCompleted = 1")
+    suspend fun getTotalCompletedLogCount(): Int
 }
